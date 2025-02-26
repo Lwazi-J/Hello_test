@@ -1,13 +1,13 @@
-package com.example.demo;
+package com.example.demo.model;
 
-public class GreetingRequest {
+public class HelloMessage {
     private String name;
     private String message;
 
-    public GreetingRequest() {
+    public HelloMessage() {
     }
 
-    public GreetingRequest(String name, String message) {
+    public HelloMessage(String name, String message) {
         this.name = name;
         this.message = message;
     }
@@ -30,7 +30,7 @@ public class GreetingRequest {
 
     @Override
     public String toString() {
-        return "GreetingRequest{" +
+        return "HelloMessage{" +
                 "name='" + name + '\'' +
                 ", message='" + message + '\'' +
                 '}';

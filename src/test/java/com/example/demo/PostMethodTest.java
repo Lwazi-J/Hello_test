@@ -38,7 +38,7 @@ public class PostMethodTest {
         // Then
         assertNotNull(response, "Response should not be null");
         assertEquals("1", response.getId(), "First greeting should have ID 1");
-        assertTrue(response.getMessage().contains(name), "Greeting should contain the name");
+        assertEquals(name, response.getName(), "Greeting should contain the name");
         assertTrue(response.getMessage().contains(message), "Greeting should contain the message");
     }
 

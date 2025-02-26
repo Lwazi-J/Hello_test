@@ -3,6 +3,7 @@ package com.example.demo;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.List;
 import java.util.Optional;
@@ -22,7 +23,7 @@ public class GreetingDaoTest {
     @DisplayName("Test save greeting")
     void testSave() {
         // Given
-        Greeting greeting = new Greeting(null, "Test message");
+        Greeting greeting = new Greeting(null, "Test message", "Test Name");
 
         // When
         Greeting saved = greetingDao.save(greeting);
@@ -31,14 +32,15 @@ public class GreetingDaoTest {
         assertNotNull(saved);
         assertEquals("1", saved.getId());
         assertEquals(greeting.getMessage(), saved.getMessage());
+        assertEquals(greeting.getName(), saved.getName());
     }
 
     @Test
     @DisplayName("Test find all greetings")
     void testFindAll() {
         // Given
-        greetingDao.save(new Greeting(null, "First message"));
-        greetingDao.save(new Greeting(null, "Second message"));
+        greetingDao.save(new Greeting(null, "First message", "First Name"));
+        greetingDao.save(new Greeting(null, "Second message", "Second Name"));
 
         // When
         List<Greeting> results = greetingDao.findAll();
@@ -47,13 +49,15 @@ public class GreetingDaoTest {
         assertEquals(2, results.size());
         assertTrue(results.stream().anyMatch(g -> g.getMessage().equals("First message")));
         assertTrue(results.stream().anyMatch(g -> g.getMessage().equals("Second message")));
+        assertTrue(results.stream().anyMatch(g -> g.getName().equals("First Name")));
+        assertTrue(results.stream().anyMatch(g -> g.getName().equals("Second Name")));
     }
 
     @Test
     @DisplayName("Test find greeting by ID")
     void testFindById() {
         // Given
-        Greeting saved = greetingDao.save(new Greeting(null, "Test message"));
+        Greeting saved = greetingDao.save(new Greeting(null, "Test message", "Test Name"));
 
         // When
         Optional<Greeting> found = greetingDao.findById(saved.getId());
@@ -62,6 +66,7 @@ public class GreetingDaoTest {
         assertTrue(found.isPresent());
         assertEquals(saved.getId(), found.get().getId());
         assertEquals(saved.getMessage(), found.get().getMessage());
+        assertEquals(saved.getName(), found.get().getName());
     }
 
     @Test
@@ -78,8 +83,8 @@ public class GreetingDaoTest {
     @DisplayName("Test update greeting")
     void testUpdate() {
         // Given
-        Greeting original = greetingDao.save(new Greeting(null, "Original message"));
-        Greeting updated = new Greeting(original.getId(), "Updated message");
+        Greeting original = greetingDao.save(new Greeting(null, "Original message", "Original Name"));
+        Greeting updated = new Greeting(original.getId(), "Updated message", "Updated Name");
 
         // When
         Optional<Greeting> result = greetingDao.update(original.getId(), updated);
@@ -88,13 +93,14 @@ public class GreetingDaoTest {
         assertTrue(result.isPresent());
         assertEquals(original.getId(), result.get().getId());
         assertEquals("Updated message", result.get().getMessage());
+        assertEquals("Updated Name", result.get().getName());
     }
 
     @Test
     @DisplayName("Test update non-existent greeting")
     void testUpdate_NotFound() {
         // Given
-        Greeting updated = new Greeting("999", "Updated message");
+        Greeting updated = new Greeting("999", "Updated message", "Updated Name");
 
         // When
         Optional<Greeting> result = greetingDao.update("999", updated);
@@ -107,7 +113,7 @@ public class GreetingDaoTest {
     @DisplayName("Test delete greeting")
     void testDelete() {
         // Given
-        Greeting saved = greetingDao.save(new Greeting(null, "Test message"));
+        Greeting saved = greetingDao.save(new Greeting(null, "Test message", "Test Name"));
 
         // When
         boolean deleted = greetingDao.delete(saved.getId());
@@ -131,7 +137,7 @@ public class GreetingDaoTest {
     @DisplayName("Test exists")
     void testExists() {
         // Given
-        Greeting saved = greetingDao.save(new Greeting(null, "Test message"));
+        Greeting saved = greetingDao.save(new Greeting(null, "Test message", "Test Name"));
 
         // When & Then
         assertTrue(greetingDao.exists(saved.getId()));
@@ -142,9 +148,9 @@ public class GreetingDaoTest {
     @DisplayName("Test sequential ID generation")
     void testSequentialIdGeneration() {
         // When
-        Greeting first = greetingDao.save(new Greeting(null, "First"));
-        Greeting second = greetingDao.save(new Greeting(null, "Second"));
-        Greeting third = greetingDao.save(new Greeting(null, "Third"));
+        Greeting first = greetingDao.save(new Greeting(null, "First", "First Name"));
+        Greeting second = greetingDao.save(new Greeting(null, "Second", "Second Name"));
+        Greeting third = greetingDao.save(new Greeting(null, "Third", "Third Name"));
 
         // Then
         assertEquals("1", first.getId());

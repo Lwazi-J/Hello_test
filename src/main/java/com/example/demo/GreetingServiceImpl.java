@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
-@Slf4j
 public class GreetingServiceImpl implements GreetingService{
 
     private final List<Greeting> greetings = new ArrayList<>();

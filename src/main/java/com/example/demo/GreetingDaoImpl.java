@@ -7,7 +7,7 @@ import java.util.List;
 import java.util.Optional;
 import org.slf4j.Logger;
 
-public class GreetingDaoImpl implements GreetingDao{
+public class GreetingDaoImpl implements GreetingDao {
 
     private final List<Greeting> greetings = Collections.synchronizedList(new ArrayList<>());
     private static final Logger log = LoggerFactory.getLogger(GreetingDaoImpl.class);
@@ -33,7 +33,11 @@ public class GreetingDaoImpl implements GreetingDao{
         log.debug("Saving new greeting: {}", greeting);
         synchronized(greetings) {
             String id = String.valueOf(greetings.size() + 1);
-            Greeting newGreeting = new Greeting(id, greeting.getMessage());
+            Greeting newGreeting = new Greeting(
+                    id,
+                    greeting.getMessage(),
+                    greeting.getName()  // Include the name field
+            );
             greetings.add(newGreeting);
             return newGreeting;
         }
@@ -49,7 +53,11 @@ public class GreetingDaoImpl implements GreetingDao{
             }
 
             int index = greetings.indexOf(existingGreeting.get());
-            Greeting updatedGreeting = new Greeting(id, greeting.getMessage());
+            Greeting updatedGreeting = new Greeting(
+                    id,
+                    greeting.getMessage(),
+                    greeting.getName()  // Include the name field
+            );
             greetings.set(index, updatedGreeting);
             return Optional.of(updatedGreeting);
         }
