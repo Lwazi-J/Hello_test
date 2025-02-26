@@ -57,7 +57,6 @@ public class HelloController {
         if (greetingOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
-
         // Format the message to include both name and message content
         String formattedMessage = String.format("Hello %s! Your message: %s",
                 request.getName(), request.getMessage());
