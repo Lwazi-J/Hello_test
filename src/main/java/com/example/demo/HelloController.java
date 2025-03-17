@@ -11,15 +11,11 @@ public class HelloController {
     private List<Greeting> greetings = new ArrayList<>();
 
     private Optional<Greeting> findGreetingById(String id) {
-        return greetings.stream()
-                .filter(g -> g.getId() != null && g.getId().equals(id))
-                .findFirst();
+        return greetings.stream().filter(g -> g.getId() != null && g.getId().equals(id)).findFirst();
     }
 
     private Optional<Greeting> findGreetingByName(String name) {
-        return greetings.stream()
-                .filter(g -> g.getName() != null && g.getName().equals(name))
-                .findFirst();
+        return greetings.stream().filter(g -> g.getName() != null && g.getName().equals(name)).findFirst();
     }
 
     @GetMapping("/hello")
@@ -41,11 +37,7 @@ public class HelloController {
     public Greeting createGreeting(@RequestBody GreetingRequest request) {
         // Format the message to include both name and message content
 
-        Greeting greeting = new Greeting(
-                String.valueOf(greetings.size() + 1),
-                request.getMessage(),
-                request.getName()
-        );
+        Greeting greeting = new Greeting(String.valueOf(greetings.size() + 1), request.getMessage(), request.getName());
         greetings.add(greeting);
         return greeting;
     }
@@ -58,15 +50,10 @@ public class HelloController {
             return ResponseEntity.notFound().build();
         }
         // Format the message to include both name and message content
-        String formattedMessage = String.format("Hello %s! Your message: %s",
-                request.getName(), request.getMessage());
+        String formattedMessage = String.format("Hello %s! Your message: %s", request.getName(), request.getMessage());
 
         int index = greetings.indexOf(greetingOpt.get());
-        Greeting updatedGreeting = new Greeting(
-                id,
-                formattedMessage,  // Use the formatted message
-                request.getName()
-        );
+        Greeting updatedGreeting = new Greeting(id, formattedMessage,request.getName()); // Use the formatted message
 
         greetings.set(index, updatedGreeting);
         return ResponseEntity.ok(updatedGreeting);
@@ -78,11 +65,7 @@ public class HelloController {
 
         if (greetingOpt.isEmpty()) {
             // If not found, create a new greeting with this name
-            Greeting newGreeting = new Greeting(
-                    String.valueOf(greetings.size() + 1),
-                    request.getMessage(),
-                    request.getName()
-            );
+            Greeting newGreeting = new Greeting(String.valueOf(greetings.size() + 1), request.getMessage(), request.getName());
             greetings.add(newGreeting);
             return ResponseEntity.ok(newGreeting);
         }
@@ -91,11 +74,7 @@ public class HelloController {
         Greeting existingGreeting = greetingOpt.get();
         int index = greetings.indexOf(existingGreeting);
 
-        Greeting updatedGreeting = new Greeting(
-                existingGreeting.getId(),
-                request.getMessage(),
-                request.getName()
-        );
+        Greeting updatedGreeting = new Greeting(existingGreeting.getId(), request.getMessage(), request.getName());
 
         greetings.set(index, updatedGreeting);
         return ResponseEntity.ok(updatedGreeting);

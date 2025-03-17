@@ -31,16 +31,14 @@ public class HelloApiStepDefs {
         RestAssured.baseURI = "http://localhost:8080";  // Default, can be overridden
         RestAssured.reset();
         // Initialize request with default values
-        request = given()
-                .contentType("application/json");
+        request = given().contentType("application/json");
     }
 
     @Given("the API is running at {string}")
     public void theAPIIsRunningAt(String url) {
         apiBaseUrl = url;
         // Update the base request with the new URL if needed
-        request = given()
-                .contentType("application/json");
+        request = given().contentType("application/json");
     }
 
     @Given("I set the {word} header to {string}")
