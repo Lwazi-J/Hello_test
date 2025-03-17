@@ -30,3 +30,13 @@ jobs:
     - name: Generate test report
       run: mvn surefire-report:report
       if: always()
+
+    - name: Build JAR file
+      run: mvn package -DskipTests
+      
+    - name: Upload JAR artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: application-jar
+        path: target/*.jar
+        retention-days: 7
