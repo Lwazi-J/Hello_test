@@ -33,11 +33,7 @@ public class GreetingDaoImpl implements GreetingDao {
         log.debug("Saving new greeting: {}", greeting);
         synchronized(greetings) {
             String id = String.valueOf(greetings.size() + 1);
-            Greeting newGreeting = new Greeting(
-                    id,
-                    greeting.getMessage(),
-                    greeting.getName()  // Include the name field
-            );
+            Greeting newGreeting = new Greeting(id, greeting.getMessage(), greeting.getName()); // Include the name field
             greetings.add(newGreeting);
             return newGreeting;
         }
@@ -53,11 +49,8 @@ public class GreetingDaoImpl implements GreetingDao {
             }
 
             int index = greetings.indexOf(existingGreeting.get());
-            Greeting updatedGreeting = new Greeting(
-                    id,
-                    greeting.getMessage(),
-                    greeting.getName()  // Include the name field
-            );
+            Greeting updatedGreeting = new Greeting(id, greeting.getMessage(), greeting.getName());  // Include the name field
+
             greetings.set(index, updatedGreeting);
             return Optional.of(updatedGreeting);
         }

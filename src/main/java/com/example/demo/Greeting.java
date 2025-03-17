@@ -54,11 +54,7 @@ public class Greeting {
     // toString method (update to include name)
     @Override
     public String toString() {
-        return "Greeting{" +
-                "id='" + id + '\'' +
-                ", message='" + message + '\'' +
-                ", name='" + name + '\'' +
-                '}';
+        return "Greeting{" + "id='" + id + '\'' + ", message='" + message + '\'' + ", name='" + name + '\'' + '}';
     }
 
     // equals and hashCode (update to include name)
@@ -67,9 +63,7 @@ public class Greeting {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         Greeting greeting = (Greeting) o;
-        return Objects.equals(id, greeting.id) &&
-                Objects.equals(message, greeting.message) &&
-                Objects.equals(name, greeting.name);
+        return Objects.equals(id, greeting.id) && Objects.equals(message, greeting.message) && Objects.equals(name, greeting.name);
     }
 
     @Override
