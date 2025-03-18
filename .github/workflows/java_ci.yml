@@ -98,9 +98,23 @@ jobs:
       - name: Deploy to AWS Lambda Sandbox
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         run: |
-          aws lambda update-function-code \
-            --function-name hello-api-sandbox \
-            --zip-file fileb://lambda/lambda-package.zip
+          # Check if function exists
+          if aws lambda get-function --function-name spring-lambda-app-sandbox --region us-east-1 2>&1 | grep -q "ResourceNotFoundException"; then
+            echo "Lambda function does not exist. Creating new function..."
+            aws lambda create-function \
+              --function-name spring-lambda-app-sandbox \
+              --runtime java17 \
+              --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/spring-lambda-app-lambda-role \
+              --handler com.example.Handler::handleRequest \
+              --zip-file fileb://lambda/lambda-package.zip \
+              --memory-size 512 \
+              --timeout 30
+          else
+            echo "Updating existing Lambda function..."
+            aws lambda update-function-code \
+              --function-name spring-lambda-app-sandbox \
+              --zip-file fileb://lambda/lambda-package.zip
+          fi
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
