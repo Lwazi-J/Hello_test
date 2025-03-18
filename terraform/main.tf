@@ -4,7 +4,7 @@ provider "aws" {
 
 # Create S3 bucket for lambda artifacts
 resource "aws_s3_bucket" "lambda_bucket" {
-  bucket = "${var.app_name}-artifacts"
+  bucket = "${var.app_name}-artifcts"
 }
 
 resource "aws_s3_bucket_versioning" "lambda_bucket_versioning" {
@@ -31,7 +31,7 @@ resource "aws_s3_object" "lambda_package" {
 
 # IAM role for Lambda
 resource "aws_iam_role" "lambda_role" {
-  name = "${var.app_name}-lambda-role"
+  name = "${var.app_name}-lamd-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

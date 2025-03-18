@@ -7,7 +7,7 @@ variable "aws_region" {
 variable "app_name" {
   description = "Application name"
   type        = string
-  default     = "spring-lambda-app"
+  default     = "spr-lambda-pipe"
 }
 
 variable "jar_file" {
