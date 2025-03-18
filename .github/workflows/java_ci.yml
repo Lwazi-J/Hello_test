@@ -1,4 +1,4 @@
-name: Java CI with Terraform
+name: Complete DevOps Pipeline
 
 on:
   push:
@@ -7,42 +7,38 @@ on:
     branches: [ main, master ]
 
 jobs:
-  build-and-test:
+  build-test-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1: On commit to GitHub (happens automatically when workflow is triggered)
+
+      # Step 2: Build
       - name: Checkout repository
         uses: actions/checkout@v1
 
-      - name: Set up JDK 17
+      - name: Set up JDK 11
         uses: actions/setup-java@v1
         with:
-          java-version: '17'
+          java-version: '11'
 
       - name: Build with Maven
-        run: mvn -B package --file pom.xml -Dmaven.compiler.source=11 -Dmaven.compiler.target=11
+        run: mvn -B compile --file pom.xml -Dmaven.compiler.source=11 -Dmaven.compiler.target=11
 
-      - name: Run tests
+      # Step 3: Run unit tests
+      - name: Run unit tests
         run: mvn test
 
+      # Step 4: Produce a JAR
       - name: Generate JAR
         run: mvn package -DskipTests
 
-      - name: List generated artifacts
+      - name: List generated JAR
         run: |
-          echo "Listing files in target directory:"
-          ls -la target/
           echo "JAR file details:"
           find target -name "*.jar" -type f -exec ls -lh {} \;
 
-  terraform:
-    needs: build-and-test
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v1
-
+      # Step 5: Run Terraform
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
         with:
@@ -55,8 +51,7 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION}}
-          # TF_VAR_region: us-east-1
+          AWS_REGION: us-east-1
 
       - name: Terraform Validate
         run: |
@@ -70,11 +65,9 @@ jobs:
           cd terraform
           terraform plan
         env:
-          # Add any necessary environment variables for your Terraform providers
-          # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
-          # TF_VAR_app_version: ${{ github.sha }}
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
@@ -82,8 +75,102 @@ jobs:
           cd terraform
           terraform apply -auto-approve
         env:
-          # Add any necessary environment variables for your Terraform providers
-          # AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          # AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
-          # TF_VAR_app_version: ${{ github.sha }}
+
+      # Step 6: Create Lambda ZIP
+      - name: Create Lambda ZIP
+        run: |
+          mkdir -p lambda/
+          cp target/*.jar lambda/
+          cd lambda
+          zip -r lambda-package.zip *
+          ls -la lambda-package.zip
+
+      # Step 7: Deploy to Sandbox
+      - name: Deploy to AWS Lambda Sandbox
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          aws lambda update-function-code \
+            --function-name hello-api-sandbox \
+            --zip-file fileb://lambda/lambda-package.zip
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
+
+      # Step 8: Run CI/CD Test
+      - name: Run Integration Tests
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          # Wait for Lambda deployment to complete
+          sleep 30
+          # Run integration tests against the sandbox environment
+          mvn verify -P integration-test
+
+      # Step 9: Create Test Report
+      - name: Generate Test Reports
+        if: always()
+        run: |
+          mvn surefire-report:report-only
+          mvn site -DgenerateReports=false
+
+      - name: Archive Test Reports
+        if: always()
+        run: |
+          mkdir -p test-reports
+          cp -R target/site/* test-reports/
+          echo "Test reports generated at $(date)" > test-reports/report-info.txt
+
+      # Step 10: Email Test Report
+      - name: Send Email with Test Report
+        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: Test Report for ${{ github.repository }}
+          body: Please find attached the test reports for the latest build.
+          to: lwazijiyane962@gmail.com
+          from: CI Pipeline
+          attachments: test-reports/report-info.txt
+
+      # Step 11: Create Release Candidate
+      - name: Create Release Candidate
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.PIPE_TOKEN }}
+        with:
+          tag_name: v${{ github.run_number }}
+          release_name: Release v${{ github.run_number }}
+          draft: false
+          prerelease: true
+
+      - name: Upload Lambda Package to Release
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./lambda/lambda-package.zip
+          asset_name: lambda-package.zip
+          asset_content_type: application/zip
+
+      # Step 12: Promote to the next environment
+      - name: Promote to Production
+        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+        run: |
+          # This would typically call another workflow or deployment process
+          echo "Promoting release candidate to production environment"
+          aws lambda update-function-code \
+            --function-name hello-api-production \
+            --zip-file fileb://lambda/lambda-package.zip
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
