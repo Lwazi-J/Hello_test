@@ -44,6 +44,12 @@ jobs:
         with:
           terraform_version: 1.0.0
 
+      # Copy JAR file to the location expected by Terraform
+      - name: Prepare JAR for Terraform
+        run: |
+          mkdir -p terraform/target
+          cp target/hello-api-test-0.0.1-SNAPSHOT.jar terraform/target/
+
       - name: Terraform Init
         run: |
           cd terraform
@@ -137,40 +143,3 @@ jobs:
           to: lwazijiyane962@gmail.com
           from: CI Pipeline
           attachments: test-reports/report-info.txt
-
-      # Step 11: Create Release Candidate
-      - name: Create Release Candidate
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.PIPE_TOKEN }}
-        with:
-          tag_name: v${{ github.run_number }}
-          release_name: Release v${{ github.run_number }}
-          draft: false
-          prerelease: true
-
-      - name: Upload Lambda Package to Release
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./lambda/lambda-package.zip
-          asset_name: lambda-package.zip
-          asset_content_type: application/zip
-
-      # Step 12: Promote to the next environment
-      - name: Promote to Production
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-        run: |
-          # This would typically call another workflow or deployment process
-          echo "Promoting release candidate to production environment"
-          aws lambda update-function-code \
-            --function-name hello-api-production \
-            --zip-file fileb://lambda/lambda-package.zip
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1

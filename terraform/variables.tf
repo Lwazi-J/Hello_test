@@ -13,7 +13,7 @@ variable "app_name" {
 variable "jar_file" {
   description = "Path to the JAR file"
   type        = string
-  default     = "C:/Users/user/Documents/Hello_test/target/hello-api-test-0.0.1-SNAPSHOT.jar"
+  default     = "../target/hello-api-test-0.0.1-SNAPSHOT.jar"
 }
 
 variable "lambda_handler" {
