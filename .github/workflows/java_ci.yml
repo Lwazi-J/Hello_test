@@ -101,6 +101,9 @@ jobs:
           mvn surefire-report:report-only
           mvn site -DgenerateReports=false
 
+          # Create directory for reports
+          mkdir -p test-reports
+
           # Create a detailed summary for email
           echo "TEST REPORT SUMMARY - $(date)" > test-reports/email-report.txt
           echo "Repository: ${{ github.repository }}" >> test-reports/email-report.txt
@@ -116,11 +119,14 @@ jobs:
             grep -r "Tests run:" target/surefire-reports/*.txt | sed 's/.*Tests run: \(.*\), Failures: \(.*\), Errors: \(.*\), Skipped: \(.*\)/\  - Tests: \1, Failures: \2, Errors: \3, Skipped: \4/' >> test-reports/email-report.txt
             echo "" >> test-reports/email-report.txt
 
-          # List any failed tests
-            grep -r "<<< FAILURE!" target/surefire-reports/*.txt | sed 's/.*\(.*Test.*\)<<< FAILURE!.*/\  - Failed: \1/' >> test-reports/email-report.txt
+            # List any failed tests
+            grep -r "<<< FAILURE!" target/surefire-reports/*.txt | sed 's/.*\(.*Test.*\)<<< FAILURE!.*/\  - Failed: \1/' >> test-reports/email-report.txt || echo "No test failures detected" >> test-reports/email-report.txt
           else
             echo "No test reports found in target/surefire-reports" >> test-reports/email-report.txt
           fi
+
+          # List the created file to verify
+          ls -la test-reports/
 
       # Step 10: Email Test Report
       - name: Send Email with Test Report
