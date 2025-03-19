@@ -4,7 +4,14 @@ provider "aws" {
 
 # Create S3 bucket for lambda artifacts
 resource "aws_s3_bucket" "lambda_bucket" {
-  bucket = "${var.app_name}-artifcts"
+  bucket = "${var.app_name}-artifacts-${random_string.suffix.result}"
+}
+
+# Add this to generate a random suffix
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
 }
 
 resource "aws_s3_bucket_versioning" "lambda_bucket_versioning" {
