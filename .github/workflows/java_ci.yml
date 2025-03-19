@@ -101,12 +101,52 @@ jobs:
           mvn surefire-report:report-only
           mvn site -DgenerateReports=false
 
-      - name: Archive Test Reports
-        if: always()
-        run: |
-          mkdir -p test-reports
-          cp -R target/site/* test-reports/
-          echo "Test reports generated at $(date)" > test-reports/report-info.txt
+          # Create a detailed summary for email
+          echo "TEST REPORT SUMMARY - $(date)" > test-reports/email-report.txt
+          echo "Repository: ${{ github.repository }}" >> test-reports/email-report.txt
+          echo "Branch: ${{ github.ref_name }}" >> test-reports/email-report.txt
+          echo "Commit: ${{ github.sha }}" >> test-reports/email-report.txt
+          echo "Run URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> test-reports/email-report.txt
+          echo "" >> test-reports/email-report.txt
+          echo "TEST RESULTS:" >> test-reports/email-report.txt
+
+          # Extract test results summary from surefire-reports
+          if [ -d "target/surefire-reports" ]; then
+            echo "Unit Test Results:" >> test-reports/email-report.txt
+            grep -r "Tests run:" target/surefire-reports/*.txt | sed 's/.*Tests run: \(.*\), Failures: \(.*\), Errors: \(.*\), Skipped: \(.*\)/\  - Tests: \1, Failures: \2, Errors: \3, Skipped: \4/' >> test-reports/email-report.txt
+            echo "" >> test-reports/email-report.txt
+
+          # List any failed tests
+            grep -r "<<< FAILURE!" target/surefire-reports/*.txt | sed 's/.*\(.*Test.*\)<<< FAILURE!.*/\  - Failed: \1/' >> test-reports/email-report.txt
+          else
+            echo "No test reports found in target/surefire-reports" >> test-reports/email-report.txt
+          fi
+
+      # Step 10: Email Test Report
+      - name: Send Email with Test Report
+        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          username: ${{ secrets.EMAIL_USERNAME }}
+          password: ${{ secrets.EMAIL_PASSWORD }}
+          subject: Test Report for ${{ github.repository }} - Build #${{ github.run_number }}
+          body: |
+            Hello,
+
+            The pipeline for ${{ github.repository }} has completed.
+            Build #${{ github.run_number }} on branch ${{ github.ref_name }}
+
+            Please find attached the test report summary.
+
+            Full details are available at: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+
+            Regards,
+            CI/CD Pipeline
+          to: lwazijiyane962@gmail.com
+          from: CI Pipeline
+          attachments: test-reports/email-report.txt
 
       # Step 10: Email Test Report
       - name: Send Email with Test Report
