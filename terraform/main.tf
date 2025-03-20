@@ -21,24 +21,17 @@ resource "aws_s3_bucket_versioning" "lambda_bucket_versioning" {
   }
 }
 
-# Create ZIP file from JAR
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  source_file = var.jar_file
-  output_path = "lambda_function.zip"
-}
-
-# Upload ZIP to S3
+# Upload JAR directly to S3 (no zipping)
 resource "aws_s3_object" "lambda_package" {
   bucket = aws_s3_bucket.lambda_bucket.id
-  key    = "code/lambda_function.zip"
-  source = data.archive_file.lambda_zip.output_path
-  etag   = filemd5(data.archive_file.lambda_zip.output_path)
+  key    = "code/hello-api-test-0.0.1-SNAPSHOT.jar"
+  source = var.jar_file
+  etag   = filemd5(var.jar_file)
 }
 
 # IAM role for Lambda
 resource "aws_iam_role" "lambda_role" {
-  name = "${var.app_name}-lamd-role"
+  name = "${var.app_name}-lambda-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -71,6 +64,9 @@ resource "aws_lambda_function" "app" {
 
   s3_bucket = aws_s3_bucket.lambda_bucket.id
   s3_key    = aws_s3_object.lambda_package.key
+
+  # Specify that the S3 object is a JAR file
+  package_type = "Zip"  # Despite the name, this works for JAR files too
 
   environment {
     variables = {
