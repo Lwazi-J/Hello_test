@@ -65,7 +65,7 @@ resource "aws_lambda_function" "app" {
   s3_key    = aws_s3_object.lambda_package.key
 
   # Specify that the S3 object is a JAR file
-  package_type = "Zip"  # Despite the name, this works for JAR files too
+  package_type = "jar"
 
   environment {
     variables = {
