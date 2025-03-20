@@ -26,7 +26,6 @@ resource "aws_s3_object" "lambda_package" {
   bucket = aws_s3_bucket.lambda_bucket.id
   key    = "code/hello-api-test-0.0.1-SNAPSHOT.jar"
   source = var.jar_file
-  etag   = filemd5(var.jar_file)
 }
 
 # IAM role for Lambda
