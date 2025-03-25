@@ -10,10 +10,10 @@ variable "app_name" {
   default     = "spr-lambda-pipe"
 }
 
-variable "jar_file" {
-  description = "Path to the JAR file"
+variable "deployment_package" {
+  description = "Path to the ZIP deployment package"
   type        = string
-  default     = "../target/hello-api-test-0.0.1-SNAPSHOT.jar"
+  default     = "../lambda/lambda-package.zip"
 }
 
 variable "lambda_handler" {
