@@ -24,7 +24,7 @@ resource "aws_s3_bucket_versioning" "lambda_bucket_versioning" {
 # Create ZIP file from JAR
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_file = var.jar_file
+  source_file = var.deployment_package
   output_path = "${path.module}/lambda_function.zip"
 }
 
