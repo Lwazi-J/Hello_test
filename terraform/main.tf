@@ -21,11 +21,11 @@ data "archive_file" "lambda_zip" {
   output_path = "lambda_function.zip"
 }
 
-# Upload ZIP to S3
+# Upload JAR directly to S3
 resource "aws_s3_object" "lambda_package" {
   bucket = aws_s3_bucket.lambda_bucket.id
-  key    = "code/lambda_function.zip"
-  source = data.archive_file.lambda_zip.output_path
+  key    = "code/${var.jar_file}"
+  source = var.jar_file
 }
 
 # IAM role for Lambda
