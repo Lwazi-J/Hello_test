@@ -13,13 +13,13 @@ variable "app_name" {
 variable "jar_file" {
   description = "Path to the JAR file"
   type        = string
-  default     = "../target/hello-api-test-0.0.1-SNAPSHOT.jar"
+  default     = "../target/hello-api-test-0.0.1-SNAPSHOT-aws.jar"
 }
 
 variable "lambda_handler" {
   description = "Lambda handler path"
   type        = string
-  default     = "com.example.Handler::handleRequest"
+  default     = "com.example.demo.Handler::handleRequest"
 }
 
 variable "lambda_runtime" {
