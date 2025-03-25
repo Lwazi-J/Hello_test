@@ -14,13 +14,6 @@ resource "aws_s3_bucket_versioning" "lambda_bucket_versioning" {
   }
 }
 
-# Create ZIP file from JAR
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  source_file = var.jar_file
-  output_path = "lambda_function.zip"
-}
-
 # Upload JAR directly to S3
 resource "aws_s3_object" "lambda_package" {
   bucket = aws_s3_bucket.lambda_bucket.id
