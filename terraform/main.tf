@@ -2,16 +2,16 @@ provider "aws" {
   region = var.aws_region
 }
 
-# Create S3 bucket for lambda artifacts
-resource "aws_s3_bucket" "lambda_bucket" {
-  bucket = "${var.app_name}-artifacts-${random_string.suffix.result}"
-}
-
-# Add this to generate a random suffix
+# Random string for unique S3 bucket name
 resource "random_string" "suffix" {
   length  = 8
   special = false
   upper   = false
+}
+
+# Create S3 bucket for lambda artifacts
+resource "aws_s3_bucket" "lambda_bucket" {
+  bucket = "${var.app_name}-artifacts-${random_string.suffix.result}"
 }
 
 resource "aws_s3_bucket_versioning" "lambda_bucket_versioning" {
@@ -21,11 +21,19 @@ resource "aws_s3_bucket_versioning" "lambda_bucket_versioning" {
   }
 }
 
-# Upload JAR directly to S3 (no zipping)
+# Create ZIP file from JAR
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_file = var.jar_file
+  output_path = "${path.module}/lambda_function.zip"
+}
+
+# Upload ZIP to S3
 resource "aws_s3_object" "lambda_package" {
   bucket = aws_s3_bucket.lambda_bucket.id
-  key    = "code/hello-api-test-0.0.1-SNAPSHOT.jar"
-  source = var.jar_file
+  key    = "code/lambda_function.zip"
+  source = data.archive_file.lambda_zip.output_path
+  etag   = filemd5(data.archive_file.lambda_zip.output_path)
 }
 
 # IAM role for Lambda
@@ -63,9 +71,6 @@ resource "aws_lambda_function" "app" {
 
   s3_bucket = aws_s3_bucket.lambda_bucket.id
   s3_key    = aws_s3_object.lambda_package.key
-
-  # Specify that the S3 object is a JAR file
-  package_type = "jar"
 
   environment {
     variables = {
