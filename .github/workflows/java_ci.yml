@@ -17,20 +17,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v1
 
-      - name: Set up JDK 11
+      - name: Set up JDK 17
         uses: actions/setup-java@v1
         with:
-          java-version: '11'
+          java-version: '17'
 
       - name: Build with Maven
         run: mvn -B compile --file pom.xml -Dmaven.compiler.source=11 -Dmaven.compiler.target=11
 
-      - name: Cache Maven packages
-        uses: actions/cache@v1
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
+      # Caching handled directly instead of using the cache action
 
   # Step 3: Run unit tests
   test:
@@ -41,17 +36,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v1
 
-      - name: Set up JDK 1
+      - name: Set up JDK 17
         uses: actions/setup-java@v1
         with:
           java-version: '17'
 
-      - name: Restore Maven cache
-        uses: actions/cache@v1
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
+      # Maven cache handled directly through Maven
 
       - name: Run unit tests
         run: mvn test
@@ -70,12 +60,7 @@ jobs:
         with:
           java-version: '17'
 
-      - name: Restore Maven cache
-        uses: actions/cache@v1
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
+      # Maven cache handled directly through Maven
 
       - name: Generate JAR
         run: mvn package -DskipTests
@@ -86,7 +71,7 @@ jobs:
           find target -name "*.jar" -type f -exec ls -lh {} \;
 
       - name: Upload JAR artifact
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v2
         with:
           name: application-jar
           path: target/*.jar
@@ -102,7 +87,7 @@ jobs:
         uses: actions/checkout@v1
 
       - name: Download JAR artifact
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v2
         with:
           name: application-jar
           path: target/
@@ -154,81 +139,11 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
 
-  # Step 6: Create Lambda ZIP
-  lambda_package:
-    name: Create Lambda Package
-    runs-on: ubuntu-latest
-    needs: package
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v1
-
-      - name: Download JAR artifact
-        uses: actions/download-artifact@v1
-        with:
-          name: application-jar
-          path: target/
-
-      - name: Create Lambda ZIP
-        run: |
-          mkdir -p lambda/
-          cp target/*.jar lambda/
-          cd lambda
-          zip -r lambda-package.zip *
-          ls -la lambda-package.zip
-
-      - name: Upload Lambda package artifact
-        uses: actions/upload-artifact@v1
-        with:
-          name: lambda-package
-          path: lambda/lambda-package.zip
-
-  # Step 7: Deploy to Sandbox
-  deploy_sandbox:
-    name: Deploy to Sandbox
-    runs-on: ubuntu-latest
-    needs: [terraform, lambda_package]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v1
-
-      - name: Download Lambda package
-        uses: actions/download-artifact@v1
-        with:
-          name: lambda-package
-          path: lambda/
-
-      - name: Deploy to AWS Lambda Sandbox
-        run: |
-          # Check if function exists
-          if aws lambda get-function --function-name spring-lambda-app-sandbox --region us-east-1 2>&1 | grep -q "ResourceNotFoundException"; then
-            echo "Lambda function does not exist. Creating new function..."
-            aws lambda create-function \
-              --function-name spring-lambda-app-sandbox \
-              --runtime java17 \
-              --role arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/spring-lambda-app-lambda-role \
-              --handler com.example.demo.Handler::handleRequest \
-              --zip-file fileb://lambda/lambda-package.zip \
-              --memory-size 512 \
-              --timeout 30
-          else
-            echo "Updating existing Lambda function..."
-            aws lambda update-function-code \
-              --function-name spring-lambda-app-sandbox \
-              --zip-file fileb://lambda/lambda-package.zip
-          fi
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
-
   # Step 8: Run CI/CD Test
   integration_test:
     name: Run Integration Tests
     runs-on: ubuntu-latest
-    needs: deploy_sandbox
+    needs: terraform
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     steps:
       - name: Checkout repository
@@ -239,14 +154,9 @@ jobs:
         with:
           java-version: '17'
 
-      - name: Restore Maven cache
-        uses: actions/cache@v1
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
+      # Maven cache handled directly through Maven
 
-      - name: Wait for Lambda deployment
+      - name: Wait for infrastructure deployment
         run: sleep 30
 
       - name: Run integration tests
@@ -262,17 +172,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v1
 
-      - name: Set up JDK 11
+      - name: Set up JDK 17
         uses: actions/setup-java@v1
         with:
-          java-version: '11'
+          java-version: '17'
 
-      - name: Restore Maven cache
-        uses: actions/cache@v1
-        with:
-          path: ~/.m2
-          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
-          restore-keys: ${{ runner.os }}-m2
+      # Maven cache handled directly through Maven
 
       - name: Generate Test Reports
         run: |
@@ -312,7 +217,7 @@ jobs:
           ls -la test-reports/
 
       - name: Upload test report artifact
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v2
         with:
           name: test-reports
           path: test-reports/
@@ -325,7 +230,7 @@ jobs:
     if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     steps:
       - name: Download test report
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v2
         with:
           name: test-reports
           path: test-reports/
