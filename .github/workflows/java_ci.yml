@@ -7,13 +7,9 @@ on:
     branches: [ main, master ]
 
 jobs:
-  build-test-and-deploy:
+  build:
     runs-on: ubuntu-latest
-
     steps:
-      # Step 1: On commit to GitHub (happens automatically when workflow is triggered)
-
-      # Step 2: Build
       - name: Checkout repository
         uses: actions/checkout@v1
 
@@ -25,11 +21,52 @@ jobs:
       - name: Build with Maven
         run: mvn -B compile --file pom.xml -Dmaven.compiler.source=11 -Dmaven.compiler.target=11
 
-      # Step 3: Run unit tests
+      - name: Upload workspace
+        uses: actions/upload-artifact@v2
+        with:
+          name: workspace
+          path: .
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v2
+        with:
+          name: workspace
+          path: .
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v1
+        with:
+          java-version: '17'
+
       - name: Run unit tests
         run: mvn test
 
-      # Step 4: Produce a JAR
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-results
+          path: target/surefire-reports/
+
+  package:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v2
+        with:
+          name: workspace
+          path: .
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v1
+        with:
+          java-version: '17'
+
       - name: Generate JAR
         run: mvn package -DskipTests
 
@@ -38,13 +75,33 @@ jobs:
           echo "JAR file details:"
           find target -name "*.jar" -type f -exec ls -lh {} \;
 
-      # Step 5: Run Terraform
+      - name: Upload JAR
+        uses: actions/upload-artifact@v2
+        with:
+          name: application-jar
+          path: target/hello-api-test-0.0.1-SNAPSHOT.jar
+
+  terraform-plan:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v2
+        with:
+          name: workspace
+          path: .
+
+      - name: Download JAR
+        uses: actions/download-artifact@v2
+        with:
+          name: application-jar
+          path: target/
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
         with:
           terraform_version: 1.0.0
 
-      # Copy JAR file to the location expected by Terraform
       - name: Prepare JAR for Terraform
         run: |
           mkdir -p terraform/target
@@ -75,26 +132,99 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
 
+      - name: Upload Terraform directory
+        uses: actions/upload-artifact@v2
+        with:
+          name: terraform-config
+          path: terraform/
+
+  deploy:
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - name: Download Terraform directory
+        uses: actions/download-artifact@v2
+        with:
+          name: terraform-config
+          path: terraform/
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v1
+        with:
+          terraform_version: 1.0.0
+
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         run: |
           cd terraform
+          terraform init
           terraform apply -auto-approve
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: us-east-1
 
-      # Step 8: Run CI/CD Test
+  integration-test:
+    needs: deploy
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v2
+        with:
+          name: workspace
+          path: .
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v1
+        with:
+          java-version: '17'
+
       - name: Run Integration Tests
-        if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
         run: |
           # Wait for Lambda deployment to complete
           sleep 30
           # Run integration tests against the sandbox environment
           mvn verify -P integration-test
 
-      # Step 9: Create Test Report
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v2
+        with:
+          name: integration-test-results
+          path: target/failsafe-reports/
+
+  generate-reports:
+    needs: [test, integration-test]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Download workspace
+        uses: actions/download-artifact@v2
+        with:
+          name: workspace
+          path: .
+
+      - name: Download test results
+        if: always()
+        uses: actions/download-artifact@v2
+        with:
+          name: test-results
+          path: target/surefire-reports/
+
+      - name: Try to download integration test results
+        if: always()
+        continue-on-error: true
+        uses: actions/download-artifact@v2
+        with:
+          name: integration-test-results
+          path: target/failsafe-reports/
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v1
+        with:
+          java-version: '17'
+
       - name: Generate Test Reports
         if: always()
         run: |
@@ -125,12 +255,34 @@ jobs:
             echo "No test reports found in target/surefire-reports" >> test-reports/email-report.txt
           fi
 
+          # If integration tests were run
+          if [ -d "target/failsafe-reports" ]; then
+            echo "" >> test-reports/email-report.txt
+            echo "Integration Test Results:" >> test-reports/email-report.txt
+            grep -r "Tests run:" target/failsafe-reports/*.txt | sed 's/.*Tests run: \(.*\), Failures: \(.*\), Errors: \(.*\), Skipped: \(.*\)/\  - Tests: \1, Failures: \2, Errors: \3, Skipped: \4/' >> test-reports/email-report.txt
+          fi
+
           # List the created file to verify
           ls -la test-reports/
 
-      # Step 10: Email Test Report
+      - name: Upload report
+        uses: actions/upload-artifact@v2
+        with:
+          name: test-reports
+          path: test-reports/
+
+  send-email:
+    needs: generate-reports
+    runs-on: ubuntu-latest
+    if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    steps:
+      - name: Download test reports
+        uses: actions/download-artifact@v2
+        with:
+          name: test-reports
+          path: test-reports/
+
       - name: Send Email with Test Report
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
@@ -153,18 +305,3 @@ jobs:
           to: lwazijiyane962@gmail.com
           from: CI Pipeline
           attachments: test-reports/email-report.txt
-
-      # Step 10: Email Test Report
-      - name: Send Email with Test Report
-        if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: Test Report for ${{ github.repository }}
-          body: Please find attached the test reports for the latest build.
-          to: lwazijiyane962@gmail.com
-          from: CI Pipeline
-          attachments: test-reports/report-info.txt
