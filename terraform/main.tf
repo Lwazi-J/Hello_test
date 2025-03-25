@@ -69,6 +69,9 @@ resource "aws_lambda_function" "app" {
   memory_size   = var.lambda_memory
   timeout       = var.lambda_timeout
 
+  # Change this line
+  package_type  = "Zip"  # NOT "jar"
+
   s3_bucket = aws_s3_bucket.lambda_bucket.id
   s3_key    = aws_s3_object.lambda_package.key
 
