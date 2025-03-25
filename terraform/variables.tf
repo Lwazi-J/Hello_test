@@ -10,16 +10,16 @@ variable "app_name" {
   default     = "spr-lambda-pipe"
 }
 
-variable "deployment_package" {
-  description = "Path to the ZIP deployment package"
+variable "jar_file" {
+  description = "Path to the JAR file"
   type        = string
-  default     = "../lambda/lambda-package.zip"
+  default     = "../target/hello-api-test-0.0.1-SNAPSHOT.jar"
 }
 
 variable "lambda_handler" {
   description = "Lambda handler path"
   type        = string
-  default     = "com.example.demo.Handler::handleRequest"
+  default     = "com.example.Handler::handleRequest"
 }
 
 variable "lambda_runtime" {

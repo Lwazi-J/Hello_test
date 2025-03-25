@@ -2,16 +2,16 @@ provider "aws" {
   region = var.aws_region
 }
 
-# Random string for unique S3 bucket name
+# Create S3 bucket for lambda artifacts
+resource "aws_s3_bucket" "lambda_bucket" {
+  bucket = "${var.app_name}-artifacts-${random_string.suffix.result}"
+}
+
+# Add this to generate a random suffix
 resource "random_string" "suffix" {
   length  = 8
   special = false
   upper   = false
-}
-
-# Create S3 bucket for lambda artifacts
-resource "aws_s3_bucket" "lambda_bucket" {
-  bucket = "${var.app_name}-artifacts-${random_string.suffix.result}"
 }
 
 resource "aws_s3_bucket_versioning" "lambda_bucket_versioning" {
@@ -24,8 +24,8 @@ resource "aws_s3_bucket_versioning" "lambda_bucket_versioning" {
 # Create ZIP file from JAR
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  source_file = var.deployment_package
-  output_path = "${path.module}/lambda_function.zip"
+  source_file = var.jar_file
+  output_path = "lambda_function.zip"
 }
 
 # Upload ZIP to S3
@@ -38,7 +38,7 @@ resource "aws_s3_object" "lambda_package" {
 
 # IAM role for Lambda
 resource "aws_iam_role" "lambda_role" {
-  name = "${var.app_name}-lambda-role"
+  name = "${var.app_name}-lamd-role"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -68,9 +68,6 @@ resource "aws_lambda_function" "app" {
   runtime       = var.lambda_runtime
   memory_size   = var.lambda_memory
   timeout       = var.lambda_timeout
-
-  # Change this line
-  package_type  = "Zip"  # NOT "jar"
 
   s3_bucket = aws_s3_bucket.lambda_bucket.id
   s3_key    = aws_s3_object.lambda_package.key
