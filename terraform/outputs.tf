@@ -17,8 +17,3 @@ output "s3_bucket" {
   description = "S3 bucket for Lambda artifacts"
   value       = aws_s3_bucket.lambda_bucket.id
 }
-
-output "zip_file_path" {
-  description = "Path to the generated ZIP file"
-  value       = data.archive_file.lambda_zip.output_path
-}
