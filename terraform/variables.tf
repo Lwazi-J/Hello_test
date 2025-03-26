@@ -13,7 +13,7 @@ variable "app_name" {
 variable "jar_file" {
   description = "Path to the JAR file"
   type        = string
-  default     = "../target/hello-api-test-0.0.1-SNAPSHOT-aws.jar"
+  default     = "https://spr-lambda-pipe-artifacts.s3.us-east-1.amazonaws.com/code/target/hello-api-test-0.0.1-SNAPSHOT-aws.jar"
 }
 
 variable "lambda_handler" {
