@@ -17,7 +17,7 @@ resource "aws_s3_bucket_versioning" "lambda_bucket_versioning" {
 # Upload JAR directly to S3
 resource "aws_s3_object" "lambda_package" {
   bucket = aws_s3_bucket.lambda_bucket.id
-  key    = var.jar_file
+  key    = basename(var.jar_file)
   source = var.jar_file
 }
 
