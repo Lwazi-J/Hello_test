@@ -30,9 +30,6 @@ public class HelloMessage {
 
     @Override
     public String toString() {
-        return "HelloMessage{" +
-                "name='" + name + '\'' +
-                ", message='" + message + '\'' +
-                '}';
+        return "HelloMessage{" + "name='" + name + '\'' + ", message='" + message + '\'' + '}';
     }
 }

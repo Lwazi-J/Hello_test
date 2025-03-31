@@ -14,11 +14,19 @@ resource "aws_s3_bucket_versioning" "lambda_bucket_versioning" {
   }
 }
 
-# Upload JAR directly to S3
+# Create a local ZIP file from the JAR
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_file = var.jar_file
+  output_path = "${path.module}/lambda_function.zip"
+}
+
+# Upload ZIP to S3
 resource "aws_s3_object" "lambda_package" {
   bucket = aws_s3_bucket.lambda_bucket.id
-  key    = basename(var.jar_file)
-  source = var.jar_file
+  key    = "lambda_function_${data.archive_file.lambda_zip.output_md5}.zip"
+  source = data.archive_file.lambda_zip.output_path
+  etag   = filemd5(data.archive_file.lambda_zip.output_path)
 }
 
 # IAM role for Lambda
@@ -62,6 +70,9 @@ resource "aws_lambda_function" "app" {
       SPRING_PROFILES_ACTIVE = "aws"
     }
   }
+
+  # Make sure Lambda is only updated when code changes
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 }
 
 # API Gateway
