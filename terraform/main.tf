@@ -2,6 +2,13 @@ provider "aws" {
   region = var.aws_region
 }
 
+# Create a local ZIP file from the JAR
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_file = var.jar_file
+  output_path = "${path.module}/lambda_function.zip"
+}
+
 # Create S3 bucket for lambda artifacts
 resource "aws_s3_bucket" "lambda_bucket" {
   bucket = "${var.app_name}-artifacts"
@@ -12,13 +19,6 @@ resource "aws_s3_bucket_versioning" "lambda_bucket_versioning" {
   versioning_configuration {
     status = "Enabled"
   }
-}
-
-# Create a local ZIP file from the JAR
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  source_file = var.jar_file
-  output_path = "${path.module}/lambda_function.zip"
 }
 
 # Upload ZIP to S3
@@ -61,6 +61,7 @@ resource "aws_lambda_function" "app" {
   runtime       = var.lambda_runtime
   memory_size   = var.lambda_memory
   timeout       = var.lambda_timeout
+  package_type  = "Zip"  # Only "Zip" or "Image" are valid values
 
   s3_bucket = aws_s3_bucket.lambda_bucket.id
   s3_key    = aws_s3_object.lambda_package.key
