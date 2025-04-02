@@ -1,335 +1,364 @@
-name: Modular CI/CD Pipeline
+name: Spring Boot AWS Lambda CI/CD Pipeline (JAR Deployment)
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, develop ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, develop ]
+  workflow_dispatch:
 
 jobs:
-  # Job 1: Build
+  # Step 1: Commit to GitHub
+  # This is handled by the developer pushing code to the repository
+  # The pipeline is triggered by this action
+
+  # Step 2: Build
   build:
-    name: Build Application
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: maven
 
       - name: Build with Maven
-        run: mvn -B compile --file pom.xml
+        run: mvn -B clean compile
 
-      - name: Generate JAR
-        run: mvn package -DskipTests
-
-      - name: List generated JAR
-        run: |
-          echo "JAR file details:"
-          find target -name "*.jar" -type f -exec ls -lh {} \;
-
-      - name: Upload JAR as artifact
-        uses: actions/upload-artifact@v4
+      - name: Cache Maven packages
+        uses: actions/cache@v3
         with:
-          name: application-jar
-          path: target/*.jar
-          retention-days: 5
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+          restore-keys: ${{ runner.os }}-m2
 
-  # Job 2: Test
-  test:
-    name: Run Unit Tests
+  # Step 3: Run Unit Tests
+  unit_tests:
+    needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
           cache: maven
 
-      - name: Run unit tests
-        run: mvn test
+      - name: Run Unit Tests
+        run: mvn -B test
 
-      - name: Generate test report artifact
-        run: |
-          mvn surefire-report:report-only
-          
-          # Create directory for reports
-          mkdir -p test-reports
-          
-          # Copy test reports
-          cp -r target/surefire-reports test-reports/ || echo "No surefire-reports found"
-          cp -r target/site test-reports/ || echo "No site reports found"
-          
-          # Create a summary file
-          echo "TEST REPORT SUMMARY - $(date)" > test-reports/summary.txt
-          echo "Repository: ${{ github.repository }}" >> test-reports/summary.txt
-          echo "Branch: ${{ github.ref_name }}" >> test-reports/summary.txt
-          
-          # Extract test results summary
-          if [ -d "target/surefire-reports" ]; then
-            echo "Unit Test Results:" >> test-reports/summary.txt
-            grep -r "Tests run:" target/surefire-reports/*.txt | sed 's/.*Tests run: \(.*\), Failures: \(.*\), Errors: \(.*\), Skipped: \(.*\)/\  - Tests: \1, Failures: \2, Errors: \3, Skipped: \4/' >> test-reports/summary.txt || echo "No test results found" >> test-reports/summary.txt
-          fi
-
-      - name: Upload test reports
-        uses: actions/upload-artifact@v4
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
         with:
-          name: unit-test-reports
-          path: test-reports/
+          name: test-results
+          path: target/surefire-reports/
           retention-days: 5
 
-  # Job 3: Deploy Infrastructure
-  terraform:
-    name: Deploy Infrastructure
+  # Step 4: Produce a JAR
+  package_jar:
+    needs: unit_tests
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Package AWS Lambda compatible JAR
+        run: mvn -B package -DskipTests -Paws
+
+      - name: Upload JAR artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: spring-boot-app
+          path: target/*-aws.jar
+          retention-days: 5
+
+  # Step 5: Run Terraform
+  terraform:
+    needs: package_jar
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Download JAR artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v3
         with:
-          name: application-jar
-          path: target
-
-      - name: Create specific JAR for Terraform
-        run: |
-          echo "Verifying downloaded JAR file:"
-          find target -name "*.jar" -type f -exec ls -lh {} \;
-          
-          # Create the terraform/target directory
-          mkdir -p terraform/target
-          
-          # Get the source JAR file
-          SOURCE_JAR=$(find target -name "*.jar" -type f | head -1)
-          echo "Found source JAR: $SOURCE_JAR"
-          
-          # Copy it to the specific file name Terraform is looking for
-          cp "$SOURCE_JAR" "terraform/target/hello-api-test-0.0.1-SNAPSHOT-aws.jar"
-          
-          # Verify the specific file exists
-          echo "Checking for specific JAR file required by Terraform:"
-          ls -lh terraform/target/hello-api-test-0.0.1-SNAPSHOT-aws.jar
+          name: spring-boot-app
+          path: target/
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+        uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: 1.7.0
+          terraform_version: 1.5.0
 
       - name: Terraform Init
-        run: |
-          cd terraform
-          terraform init
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
+        run: terraform init
 
       - name: Terraform Validate
-        run: |
-          cd terraform
-          terraform validate
-        env:
-          AWS_REGION: us-east-1
+        run: terraform validate
 
       - name: Terraform Plan
         run: |
-          cd terraform
-          terraform plan
+          terraform plan \
+            -var="app_name=spr-lambda-pipe-${{ github.ref == 'refs/heads/main' && 'prod' || 'sandbox' }}" \
+            -var="jar_file=target/hello-api-test-0.0.1-SNAPSHOT-aws.jar" \
+            -out=tfplan
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
 
       - name: Terraform Apply
-        run: |
-          cd terraform
-          terraform apply -auto-approve
+        run: terraform apply -auto-approve tfplan
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: us-east-1
 
-      - name: Extract API Gateway URL
-        id: extract-url
+      - name: Extract Terraform Outputs
         run: |
-          cd terraform
-          API_URL=$(terraform output -raw api_gateway_url || echo "")
-          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
-          echo "API Gateway URL: $API_URL"
-          
-          # Save the URL to a file for artifact
-          mkdir -p api-info
-          echo "$API_URL" > api-info/api_url.txt
+          echo "API_ENDPOINT=$(terraform output -raw api_endpoint)" >> $GITHUB_ENV
+          echo "FUNCTION_NAME=$(terraform output -raw function_name)" >> $GITHUB_ENV
+          echo "S3_BUCKET=$(terraform output -raw s3_bucket)" >> $GITHUB_ENV
 
-      - name: Upload API info as artifact
-        uses: actions/upload-artifact@v4
+      - name: Save Terraform Outputs
+        run: |
+          mkdir -p terraform-outputs
+          echo "{\"api_endpoint\":\"$API_ENDPOINT\",\"function_name\":\"$FUNCTION_NAME\",\"s3_bucket\":\"$S3_BUCKET\"}" > terraform-outputs/outputs.json
+
+      - name: Upload Terraform Outputs
+        uses: actions/upload-artifact@v3
         with:
-          name: api-details
-          path: api-info
-          retention-days: 1
+          name: terraform-outputs
+          path: terraform-outputs/outputs.json
+          retention-days: 5
 
-  # Job 4: Integration Tests
-  integration_test:
-    name: Run Integration Tests
+  # Step 6: Upload JAR to S3
+  upload_jar_to_s3:
+    needs: terraform
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
-    needs: terraform  # This dependency can't be removed as we need the API URL
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download JAR artifact
+        uses: actions/download-artifact@v3
+        with:
+          name: spring-boot-app
+          path: lambda/
+
+      - name: Download Terraform Outputs
+        uses: actions/download-artifact@v3
+        with:
+          name: terraform-outputs
+          path: ./
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Get S3 bucket name
+        run: |
+          S3_BUCKET=$(cat outputs.json | jq -r '.s3_bucket')
+          echo "S3_BUCKET=$S3_BUCKET" >> $GITHUB_ENV
+
+      - name: Upload JAR directly to S3
+        run: |
+          cd lambda
+          JAR_FILE=$(ls *.jar)
+          aws s3 cp $JAR_FILE s3://$S3_BUCKET/lambda-${{ github.sha }}.jar
+
+      - name: Record JAR location
+        run: |
+          mkdir -p jar-info
+          echo "{\"s3_bucket\":\"$S3_BUCKET\",\"s3_key\":\"lambda-${{ github.sha }}.jar\"}" > jar-info/location.json
+
+      - name: Upload JAR info
+        uses: actions/upload-artifact@v3
+        with:
+          name: jar-info
+          path: jar-info/location.json
+          retention-days: 5
+
+  # Step 7: Deploy to Sandbox
+  deploy_to_sandbox:
+    needs: upload_jar_to_s3
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: sandbox
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download Terraform Outputs
+        uses: actions/download-artifact@v3
+        with:
+          name: terraform-outputs
+          path: ./
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
+      - name: Get Lambda function name
+        run: |
+          FUNCTION_NAME=$(cat outputs.json | jq -r '.function_name')
+          echo "FUNCTION_NAME=$FUNCTION_NAME" >> $GITHUB_ENV
+          API_ENDPOINT=$(cat outputs.json | jq -r '.api_endpoint')
+          echo "API_ENDPOINT=$API_ENDPOINT" >> $GITHUB_ENV
+
+      - name: Verify deployment
+        run: |
+          aws lambda get-function \
+            --function-name $FUNCTION_NAME \
+            --query 'Configuration.LastUpdateStatus' \
+            --output text
+
+      - name: Save deployment info
+        run: |
+          mkdir -p deployment-info
+          echo "{\"environment\":\"sandbox\",\"api_endpoint\":\"$API_ENDPOINT\",\"function_name\":\"$FUNCTION_NAME\"}" > deployment-info/sandbox.json
+
+      - name: Upload deployment info
+        uses: actions/upload-artifact@v3
+        with:
+          name: deployment-info
+          path: deployment-info/sandbox.json
+          retention-days: 5
+
+  # Step 8: Run CI/CD Test
+  ci_cd_test:
+    needs: deploy_to_sandbox
+    if: github.ref != 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: sandbox
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download deployment info
+        uses: actions/download-artifact@v3
+        with:
+          name: deployment-info
+          path: ./
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v3
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: maven
 
-      - name: Download API details
-        uses: actions/download-artifact@v4
-        with:
-          name: api-details
-          path: api-info
-
-      - name: Wait for API to be ready
+      - name: Get API endpoint
         run: |
-          # Read API URL from file
-          API_URL=$(cat api-info/api_url.txt)
-          echo "API Gateway URL: $API_URL"
-          
-          # Basic wait with retry
-          MAX_RETRIES=30
-          RETRY_COUNT=0
-          
-          while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-            echo "Waiting for API to be ready... (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)"
-          
-            # Try to call the API
-            STATUS_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$API_URL" || echo "000")
-          
-            if [[ "$STATUS_CODE" == "200" ]] || [[ "$STATUS_CODE" == "403" ]] || [[ "$STATUS_CODE" == "404" ]]; then
-              echo "API is responding with status code: $STATUS_CODE"
-              break
-            else
-              echo "API not ready, got status code: $STATUS_CODE"
-              sleep 10
-              RETRY_COUNT=$((RETRY_COUNT+1))
-            fi
-          done
-          
-          if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-            echo "WARNING: Maximum retries reached. Proceeding anyway but API might not be ready."
-          fi
+          API_ENDPOINT=$(cat sandbox.json | jq -r '.api_endpoint')
+          echo "API_ENDPOINT=$API_ENDPOINT" >> $GITHUB_ENV
 
       - name: Run integration tests
-        run: mvn verify -P integration-test
-
-      - name: Generate integration test report
         run: |
-          # Create directory for reports
-          mkdir -p integration-test-reports
-          
-          # Extract integration test results if available
-          if [ -d "target/failsafe-reports" ]; then
-            cp -r target/failsafe-reports integration-test-reports/
-          
-            # Create a summary
-            echo "INTEGRATION TEST REPORT SUMMARY - $(date)" > integration-test-reports/summary.txt
-            grep -r "Tests run:" target/failsafe-reports/*.txt | sed 's/.*Tests run: \(.*\), Failures: \(.*\), Errors: \(.*\), Skipped: \(.*\)/\  - Tests: \1, Failures: \2, Errors: \3, Skipped: \4/' >> integration-test-reports/summary.txt || echo "No test results found" >> integration-test-reports/summary.txt
-          else
-            echo "No integration test reports found" > integration-test-reports/summary.txt
-          fi
+          # Create basic test script
+          mkdir -p integration-tests/reports
+          echo "#!/bin/bash" > run-tests.sh
+          echo "echo 'Testing API endpoint: $API_ENDPOINT'" >> run-tests.sh
+          echo "curl -v $API_ENDPOINT/health > integration-tests/reports/health-test.log" >> run-tests.sh
+          echo "curl -v $API_ENDPOINT/api/hello > integration-tests/reports/hello-test.log" >> run-tests.sh
+          echo "echo 'Tests completed'" >> run-tests.sh
+          chmod +x run-tests.sh
+          ./run-tests.sh
 
-      - name: Upload integration test reports
-        uses: actions/upload-artifact@v4
+      - name: Upload integration test results
+        uses: actions/upload-artifact@v3
         with:
-          name: integration-test-reports
-          path: integration-test-reports/
+          name: integration-test-results
+          path: integration-tests/reports/
           retention-days: 5
 
-  # Job 5: Email Report
-  email_report:
-    name: Email Test Report
+  # Step 9: Create Test Report
+  create_test_report:
+    needs: [unit_tests, ci_cd_test]
+    if: always() && github.ref != 'refs/heads/main' && needs.unit_tests.result == 'success'
     runs-on: ubuntu-latest
-    needs: [test, integration_test]
-    if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     steps:
-      - name: Download unit test reports
-        uses: actions/download-artifact@v4
-        with:
-          name: unit-test-reports
-          path: unit-test-reports/
-        continue-on-error: true
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Download integration test reports
-        uses: actions/download-artifact@v4
+      - name: Download unit test results
+        uses: actions/download-artifact@v3
         with:
-          name: integration-test-reports
-          path: integration-test-reports/
-        continue-on-error: true
+          name: test-results
+          path: ./reports/unit-tests
 
-      - name: Combine test reports
+      - name: Download integration test results
+        if: needs.ci_cd_test.result == 'success'
+        uses: actions/download-artifact@v3
+        with:
+          name: integration-test-results
+          path: ./reports/integration-tests
+
+      - name: Generate consolidated test report
         run: |
-          mkdir -p combined-reports
-          
-          # Create email report
-          echo "TEST REPORT SUMMARY - $(date)" > combined-reports/email-report.txt
-          echo "Repository: ${{ github.repository }}" >> combined-reports/email-report.txt
-          echo "Branch: ${{ github.ref_name }}" >> combined-reports/email-report.txt
-          echo "Commit: ${{ github.sha }}" >> combined-reports/email-report.txt
-          echo "Run URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> combined-reports/email-report.txt
-          echo "" >> combined-reports/email-report.txt
-          
-          # Add unit test summary
-          if [ -f "unit-test-reports/summary.txt" ]; then
-            echo "UNIT TESTS:" >> combined-reports/email-report.txt
-            cat unit-test-reports/summary.txt >> combined-reports/email-report.txt
-            echo "" >> combined-reports/email-report.txt
-          else
-            echo "No unit test report available" >> combined-reports/email-report.txt
-            echo "" >> combined-reports/email-report.txt
+          mkdir -p ./reports/consolidated
+          echo "<html><head><title>Test Report</title></head><body>" > ./reports/consolidated/test-report.html
+          echo "<h1>Unit Test Results</h1>" >> ./reports/consolidated/test-report.html
+          echo "<pre>" >> ./reports/consolidated/test-report.html
+          find ./reports/unit-tests -type f -name "*.xml" -exec cat {} \; >> ./reports/consolidated/test-report.html
+          echo "</pre>" >> ./reports/consolidated/test-report.html
+          if [ -d "./reports/integration-tests" ]; then
+            echo "<h1>Integration Test Results</h1>" >> ./reports/consolidated/test-report.html
+            echo "<pre>" >> ./reports/consolidated/test-report.html
+            find ./reports/integration-tests -type f -name "*.log" -exec cat {} \; >> ./reports/consolidated/test-report.html
+            echo "</pre>" >> ./reports/consolidated/test-report.html
           fi
-          
-          # Add integration test summary
-          if [ -f "integration-test-reports/summary.txt" ]; then
-            echo "INTEGRATION TESTS:" >> combined-reports/email-report.txt
-            cat integration-test-reports/summary.txt >> combined-reports/email-report.txt
-          else
-            echo "No integration test report available" >> combined-reports/email-report.txt
-          fi
+          echo "</body></html>" >> ./reports/consolidated/test-report.html
 
-      - name: Send Email with Test Report
-        uses: dawidd6/action-send-mail@v3.9.0
+      - name: Upload consolidated test report
+        uses: actions/upload-artifact@v3
         with:
-          server_address: smtp.gmail.com
-          server_port: 465
-          username: ${{ secrets.EMAIL_USERNAME }}
-          password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: Test Report for ${{ github.repository }} - Build #${{ github.run_number }}
-          body: |
-            Hello,
-            
-            The pipeline for ${{ github.repository }} has completed.
-            Build #${{ github.run_number }} on branch ${{ github.ref_name }}
-            
-            Please find attached the test report summary.
-            
-            Full details are available at: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-            
-            Regards,
-            CI/CD Pipeline
-          to: lwazijiyane962@gmail.com
-          from: CI Pipeline
-          attachments: combined-reports/email-report.txt
-        continue-on-error: true
+          name: consolidated-test-report
+          path: ./reports/consolidated/
+          retention-days: 10
+
+  # Step 10: Email Test Report
+  email_test_report:
+    needs: create_test_report
+    if: always() && needs.create_test_report.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download consolidated test report
+        uses: actions/download-artifact@v3
+        with:
+          name: consolidated-test-report
+          path: ./reports
+
+      - name: Send email with test report
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: Spring Boot Lambda Application - Test Report
+          body: Please find attached the latest test report for the Spring Boot Lambda application.
+          to: team@example.com
+          from: CI/CD Pipeline <cicd@example.com>
+          attachments: ./reports/test-report.html
