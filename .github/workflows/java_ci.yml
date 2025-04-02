@@ -88,10 +88,18 @@ jobs:
       - name: Build JAR for Terraform
         run: mvn package -DskipTests
 
+      - name: Get JAR filename
+        id: get-jar
+        run: |
+          JAR_PATH=$(find target -name "*.jar" -type f | head -1)
+          echo "JAR_PATH=$JAR_PATH" >> $GITHUB_ENV
+          echo "Found JAR: $JAR_PATH"
+
       - name: Prepare JAR for Terraform
         run: |
           mkdir -p terraform/target
-          cp target/*.jar terraform/target/
+          cp "$JAR_PATH" terraform/target/
+          echo "jar_file=terraform/$JAR_PATH" >> terraform.tfvars
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v1
