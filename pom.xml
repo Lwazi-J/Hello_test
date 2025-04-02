@@ -8,13 +8,13 @@
 	<parent>
 		<groupId>org.springframework.boot</groupId>
 		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.1.5</version>
+		<version>3.2.0</version>
 		<relativePath/> <!-- lookup parent from repository -->
 	</parent>
 
 	<!-- Project Info -->
 	<groupId>com.example</groupId>
-	<artifactId>hello-api-test</artifactId>
+	<artifactId>demo</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>hello-api-test</name>
 	<description>Demo project for Spring Boot Hello API</description>
@@ -23,6 +23,13 @@
 		<java.version>17</java.version>
 		<cucumber.version>7.14.0</cucumber.version>
 		<rest-assured.version>5.3.2</rest-assured.version>
+		<maven.compiler.source>17</maven.compiler.source>
+		<maven.compiler.target>17</maven.compiler.target>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+		<aws.sdk.version>1.12.714</aws.sdk.version>
+		<aws.lambda.core.version>1.2.2</aws.lambda.core.version>
+		<aws.lambda.events.version>3.11.0</aws.lambda.events.version>
 	</properties>
 
 	<dependencies>
@@ -34,13 +41,6 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
-		</dependency>
-
-		<!-- https://mvnrepository.com/artifact/org.apache.maven.plugins/maven-shade-plugin -->
-		<dependency>
-			<groupId>org.apache.maven.plugins</groupId>
-			<artifactId>maven-shade-plugin</artifactId>
-			<version>3.4.1</version>
 		</dependency>
 
 		<!-- SLF4J and Logging -->
@@ -56,42 +56,12 @@
 			<optional>true</optional>
 		</dependency>
 
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
-		</dependency>
-
-		<!-- https://mvnrepository.com/artifact/com.amazonaws.serverless/aws-serverless-java-container-core -->
-		<dependency>
-			<groupId>com.amazonaws.serverless</groupId>
-			<artifactId>aws-serverless-java-container-core</artifactId>
-			<version>2.1.2</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.amazonaws</groupId>
-			<artifactId>aws-lambda-java-core</artifactId>
-			<version>1.2.1</version>
-		</dependency>
-
 		<!-- Optional: Spring Boot Dev Tools -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-devtools</artifactId>
 			<scope>runtime</scope>
 			<optional>true</optional>
-		</dependency>
-
-		<dependency>
-			<groupId>com.amazonaws</groupId>
-			<artifactId>aws-lambda-java-core</artifactId>
-			<version>1.2.2</version>
-		</dependency>
-
-		<dependency>
-			<groupId>com.amazonaws</groupId>
-			<artifactId>aws-lambda-java-events</artifactId>
-			<version>3.11.1</version>
 		</dependency>
 
 		<!-- Spring Boot Test Dependencies -->
@@ -114,28 +84,18 @@
 			<version>7.14.0</version>
 			<scope>test</scope>
 		</dependency>
-
-		<!-- Update to a compatible AWS Serverless Java Container version -->
-		<dependency>
-			<groupId>com.amazonaws.serverless</groupId>
-			<artifactId>aws-serverless-java-container-spring</artifactId>
-			<version>2.0.0-M2</version> <!-- Check for the version compatible with your Spring Boot -->
-		</dependency>
-
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter-api</artifactId>
 			<version>5.9.2</version>
 			<scope>test</scope>
 		</dependency>
-
 		<!-- JUnit 5 (Jupiter) -->
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter-api</artifactId>
 			<scope>test</scope>
 		</dependency>
-
 		<dependency>
 			<groupId>org.junit.jupiter</groupId>
 			<artifactId>junit-jupiter-engine</artifactId>
@@ -178,6 +138,37 @@
 			<artifactId>json</artifactId>
 			<version>20231013</version>
 		</dependency>
+
+		<!-- AWS Lambda Dependencies -->
+		<dependency>
+			<groupId>com.amazonaws</groupId>
+			<artifactId>aws-lambda-java-core</artifactId>
+			<version>${aws.lambda.core.version}</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.amazonaws</groupId>
+			<artifactId>aws-lambda-java-events</artifactId>
+			<version>${aws.lambda.events.version}</version>
+		</dependency><!-- AWS Lambda Logging -->
+
+		<dependency>
+			<groupId>com.amazonaws</groupId>
+			<artifactId>aws-lambda-java-log4j2</artifactId>
+			<version>1.5.1</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.amazonaws.serverless</groupId>
+			<artifactId>aws-serverless-java-container-springboot3</artifactId>
+			<version>2.0.0-M2</version>
+		</dependency>
+
+		<dependency>
+			<groupId>com.amazonaws.serverless</groupId>
+			<artifactId>aws-serverless-java-container-spring</artifactId>
+			<version>1.9.1</version>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -193,17 +184,45 @@
 							<artifactId>lombok</artifactId>
 						</exclude>
 					</excludes>
-					<layout>ZIP</layout>
-					<layers>
-						<enabled>false</enabled>
-					</layers>
-					<classifier>aws</classifier>
 				</configuration>
+			</plugin>
+
+
+
+			<!-- Maven Surefire Plugin for Tests -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<includes>
+						<include>/*Test.java</include>
+						<include>/*Tests.java</include>
+						<include>/*TestRunner.java</include>
+					</includes>
+				</configuration>
+			</plugin>
+
+			<!-- Cucumber Reports Plugin -->
+			<plugin>
+				<groupId>net.masterthought</groupId>
+				<artifactId>maven-cucumber-reporting</artifactId>
+				<version>5.7.5</version>
 				<executions>
 					<execution>
+						<id>execution</id>
+						<phase>verify</phase>
 						<goals>
-							<goal>repackage</goal>
+							<goal>generate</goal>
 						</goals>
+						<configuration>
+							<projectName>hello-api-test</projectName>
+							<outputDirectory>${project.build.directory}/cucumber-reports</outputDirectory>
+							<inputDirectory>${project.build.directory}/cucumber-reports</inputDirectory>
+							<jsonFiles>
+								<param>/*.json</param>
+							</jsonFiles>
+							<skip>false</skip>
+						</configuration>
 					</execution>
 				</executions>
 			</plugin>
@@ -232,88 +251,6 @@
 									</excludes>
 								</filter>
 							</filters>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-
-
-			<plugin>
-				<groupId>net.masterthought</groupId>
-				<artifactId>maven-cucumber-reporting</artifactId>
-				<version>5.7.5</version>
-				<executions>
-					<execution>
-						<id>execution</id>
-						<phase>verify</phase>
-						<goals>
-							<goal>generate</goal>
-						</goals>
-						<configuration>
-							<projectName>hello-api-test</projectName>
-							<outputDirectory>${project.build.directory}/cucumber-reports</outputDirectory>
-							<inputDirectory>${project.build.directory}/cucumber-reports</inputDirectory>
-							<jsonFiles>
-								<param>**/*.json</param>
-							</jsonFiles>
-							<skip>false</skip>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-
-			<!-- Maven Surefire Plugin for Tests -->
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-surefire-plugin</artifactId>
-				<configuration>
-					<includes>
-						<include>**/*Test.java</include>
-						<include>**/*Tests.java</include>
-						<include>**/*TestRunner.java</include>
-					</includes>
-				</configuration>
-			</plugin>
-
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-shade-plugin</artifactId>
-				<version>3.1.0</version>
-				<configuration>
-					<createDependencyReducedPom>false</createDependencyReducedPom>
-				</configuration>
-				<executions>
-					<execution>
-						<phase>package</phase>
-						<goals>
-							<goal>shade</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-
-
-
-			<!-- Cucumber Reports Plugin -->
-			<plugin>
-				<groupId>net.masterthought</groupId>
-				<artifactId>maven-cucumber-reporting</artifactId>
-				<version>5.7.5</version>
-				<executions>
-					<execution>
-						<id>execution</id>
-						<phase>verify</phase>
-						<goals>
-							<goal>generate</goal>
-						</goals>
-						<configuration>
-							<projectName>hello-api-test</projectName>
-							<outputDirectory>${project.build.directory}/cucumber-reports</outputDirectory>
-							<inputDirectory>${project.build.directory}/cucumber-reports</inputDirectory>
-							<jsonFiles>
-								<param>**/*.json</param>
-							</jsonFiles>
-							<skip>false</skip>
 						</configuration>
 					</execution>
 				</executions>
