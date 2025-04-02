@@ -57,7 +57,22 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: application-jar
-          path: terraform/target
+          path: target
+
+      - name: Verify JAR and copy to terraform directory
+        run: |
+          echo "Verifying downloaded JAR file:"
+          find target -name "*.jar" -type f -exec ls -lh {} \;
+          
+          # Make sure terraform/target directory exists
+          mkdir -p terraform/target
+          
+          # Copy the JAR to the terraform/target directory
+          cp target/*.jar terraform/target/
+          
+          # Verify copy worked correctly
+          echo "JAR file in terraform/target directory:"
+          find terraform/target -name "*.jar" -type f -exec ls -lh {} \;
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
