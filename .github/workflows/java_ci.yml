@@ -1,4 +1,4 @@
-name: AWS Lambda CI/CD Pipeline
+name: Modular CI/CD Pipeline
 
 on:
   push:
@@ -7,50 +7,86 @@ on:
     branches: [ main, master ]
 
 jobs:
-  build-and-test:
-    name: Build and Test
+  # Step 1 & 2: Build
+  build:
+    name: Build Application
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v1
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v3
+        uses: actions/setup-java@v1
         with:
           java-version: '17'
-          distribution: 'temurin'
-          cache: maven
 
       - name: Build with Maven
-        run: mvn -B compile --file pom.xml
+        run: |
+          mvn -B compile --file pom.xml -Dmaven.compiler.source=17 -Dmaven.compiler.target=17
+          # Create marker file to indicate build success
+          echo "Build completed" > build.txt
+
+  # Step 3: Test
+  test:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v1
+        with:
+          java-version: '17'
 
       - name: Run unit tests
-        run: mvn test
+        run: |
+          mvn test
+          # Create marker file to indicate test success
+          echo "Tests completed" > tests.txt
+
+  # Step 4: Package
+  package:
+    name: Create JAR Package
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v1
+        with:
+          java-version: '17'
 
       - name: Generate JAR
         run: mvn package -DskipTests
 
-      - name: Upload JAR as artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: application-jar
-          path: target/*.jar
-          retention-days: 1
+      - name: List generated JAR
+        run: |
+          echo "JAR file details:"
+          find target -name "*.jar" -type f -exec ls -lh {} \;
+          # Create marker file to indicate packaging success
+          echo "Package completed" > package.txt
 
-  deploy:
-    name: Deploy to AWS
-    needs: build-and-test
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+  # Step 5: Terraform
+  terraform:
+    name: Deploy Infrastructure
     runs-on: ubuntu-latest
+    needs: package
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v1
 
-      - name: Download JAR artifact
-        uses: actions/download-artifact@v3
+      - name: Set up JDK 17
+        uses: actions/setup-java@v1
         with:
-          name: application-jar
-          path: target/
+          java-version: '17'
+
+      - name: Build JAR for Terraform
+        run: mvn package -DskipTests
 
       - name: Get JAR filename
         id: get-jar
@@ -59,119 +95,168 @@ jobs:
           echo "JAR_PATH=$JAR_PATH" >> $GITHUB_ENV
           echo "Found JAR: $JAR_PATH"
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+      - name: Prepare JAR for Terraform
+        run: |
+          mkdir -p terraform/target
+          cp "$JAR_PATH" terraform/target/
+          echo "jar_file=terraform/$JAR_PATH" >> terraform.tfvars
 
       - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+        uses: hashicorp/setup-terraform@v1
         with:
-          terraform_version: 1.5.0
+          terraform_version: 1.0.0
 
       - name: Terraform Init
-        run: terraform init
+        run: |
+          cd terraform
+          terraform init
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
 
       - name: Terraform Validate
-        run: terraform validate
-
-      - name: Create terraform.tfvars
         run: |
-          cat > terraform.tfvars << EOF
-          aws_region = "${{ vars.AWS_REGION || 'us-east-1' }}"
-          app_name = "${{ vars.APP_NAME || 'spr-lambda-pipe' }}"
-          jar_file = "${{ env.JAR_PATH }}"
-          lambda_handler = "${{ vars.LAMBDA_HANDLER || 'com.example.demo.Handler::handleRequest' }}"
-          lambda_runtime = "${{ vars.LAMBDA_RUNTIME || 'java17' }}"
-          lambda_memory = ${{ vars.LAMBDA_MEMORY || 512 }}
-          lambda_timeout = ${{ vars.LAMBDA_TIMEOUT || 30 }}
-          EOF
+          cd terraform
+          terraform validate
+        env:
+          AWS_REGION: us-east-1
 
       - name: Terraform Plan
-        run: terraform plan -var-file=terraform.tfvars -input=false
+        run: |
+          cd terraform
+          terraform plan
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
 
       - name: Terraform Apply
-        if: github.event_name == 'push'
-        run: terraform apply -var-file=terraform.tfvars -auto-approve -input=false
-
-      - name: Output API Endpoint
-        if: github.event_name == 'push'
         run: |
-          echo "API Endpoint: $(terraform output -raw api_endpoint)"
-          echo "API_ENDPOINT=$(terraform output -raw api_endpoint)" >> $GITHUB_ENV
+          cd terraform
+          terraform apply -auto-approve
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: us-east-1
 
-  test-deployment:
-    name: Test Deployment
-    needs: deploy
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+      - name: Create marker file
+        run: echo "Terraform completed" > terraform.txt
+
+  # Step 6: Integration Tests
+  integration_test:
+    name: Run Integration Tests
     runs-on: ubuntu-latest
+    needs: terraform
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v1
 
-      - name: Wait for deployment to stabilize
+      - name: Set up JDK 17
+        uses: actions/setup-java@v1
+        with:
+          java-version: '17'
+
+      - name: Wait for infrastructure deployment
         run: sleep 30
 
-      - name: Get API Endpoint from previous job
+      - name: Run integration tests
         run: |
-          API_ENDPOINT="${{ needs.deploy.outputs.API_ENDPOINT }}"
-          if [ -z "$API_ENDPOINT" ]; then
-            echo "Warning: API Endpoint not available. Skipping integration tests."
-            exit 0
-          fi
+          mvn verify -P integration-test
+          # Create marker file to indicate integration test success
+          echo "Integration tests completed" > integration.txt
 
-      - name: Test API Endpoint
-        run: |
-          if [ -n "$API_ENDPOINT" ]; then
-            curl -s "$API_ENDPOINT" || echo "API not responding yet, may need more time to initialize"
-            echo "For complete integration tests, run: mvn verify -P integration-test"
-          fi
-
-  notify:
-    name: Send Notification
-    needs: [deploy, test-deployment]
-    if: always() && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+  # Step 7: Test Report
+  test_report:
+    name: Generate Test Reports
     runs-on: ubuntu-latest
+    needs: [test, integration_test]
+    if: always()
     steps:
-      - name: Prepare deployment report
-        run: |
-          mkdir -p reports
-          cat > reports/deployment-report.txt << EOF
-          DEPLOYMENT REPORT
-          ----------------
-          Repository: ${{ github.repository }}
-          Branch: ${{ github.ref_name }}
-          Commit: ${{ github.sha }}
-          Run URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          
-          The Lambda function has been deployed to AWS.
-          Check the AWS Console for further details.
-          EOF
+      - name: Checkout repository
+        uses: actions/checkout@v1
 
-      - name: Send Email Notification
-        if: ${{ secrets.EMAIL_USERNAME != '' && secrets.EMAIL_PASSWORD != '' }}
+      - name: Set up JDK 17
+        uses: actions/setup-java@v1
+        with:
+          java-version: '17'
+
+      - name: Generate Test Reports
+        run: |
+          mvn surefire-report:report-only
+          mvn site -DgenerateReports=false
+
+      - name: Prepare test report
+        run: |
+          # Create directory for reports
+          mkdir -p test-reports
+          
+          # Create a detailed summary for email
+          echo "TEST REPORT SUMMARY - $(date)" > test-reports/email-report.txt
+          echo "Repository: ${{ github.repository }}" >> test-reports/email-report.txt
+          echo "Branch: ${{ github.ref_name }}" >> test-reports/email-report.txt
+          echo "Commit: ${{ github.sha }}" >> test-reports/email-report.txt
+          echo "Run URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> test-reports/email-report.txt
+          echo "" >> test-reports/email-report.txt
+          echo "TEST RESULTS:" >> test-reports/email-report.txt
+          
+          # Extract test results summary from surefire-reports
+          if [ -d "target/surefire-reports" ]; then
+            echo "Unit Test Results:" >> test-reports/email-report.txt
+            grep -r "Tests run:" target/surefire-reports/*.txt | sed 's/.*Tests run: \(.*\), Failures: \(.*\), Errors: \(.*\), Skipped: \(.*\)/\  - Tests: \1, Failures: \2, Errors: \3, Skipped: \4/' >> test-reports/email-report.txt || echo "No test results found" >> test-reports/email-report.txt
+            echo "" >> test-reports/email-report.txt
+          
+            # List any failed tests
+            grep -r "<<< FAILURE!" target/surefire-reports/*.txt | sed 's/.*\(.*Test.*\)<<< FAILURE!.*/\  - Failed: \1/' >> test-reports/email-report.txt || echo "No test failures detected" >> test-reports/email-report.txt
+          else
+            echo "No test reports found in target/surefire-reports" >> test-reports/email-report.txt
+          fi
+          
+          # Create marker file
+          echo "Test report generation completed" > report.txt
+          
+          # List the created file to verify
+          ls -la test-reports/
+
+  # Step 8: Email Report
+  email_report:
+    name: Email Test Report
+    runs-on: ubuntu-latest
+    needs: test_report
+    if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v1
+
+      - name: Generate test report for email
+        run: |
+          mkdir -p test-reports
+          echo "TEST REPORT SUMMARY - $(date)" > test-reports/email-report.txt
+          echo "Repository: ${{ github.repository }}" >> test-reports/email-report.txt
+          echo "Please check the GitHub Actions page for full details." >> test-reports/email-report.txt
+
+      - name: Send Email with Test Report
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
           server_port: 465
           username: ${{ secrets.EMAIL_USERNAME }}
           password: ${{ secrets.EMAIL_PASSWORD }}
-          subject: Deployment Report for ${{ github.repository }} - Build #${{ github.run_number }}
+          subject: Test Report for ${{ github.repository }} - Build #${{ github.run_number }}
           body: |
             Hello,
             
-            The deployment pipeline for ${{ github.repository }} has completed.
+            The pipeline for ${{ github.repository }} has completed.
             Build #${{ github.run_number }} on branch ${{ github.ref_name }}
             
-            Please check the AWS Console to verify the Lambda function deployment.
+            Please find attached the test report summary.
             
             Full details are available at: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
             
             Regards,
             CI/CD Pipeline
-          to: ${{ vars.NOTIFICATION_EMAIL || 'team@example.com' }}
+          to: lwazijiyane962@gmail.com
           from: CI Pipeline
-          attachments: reports/deployment-report.txt
+          attachments: test-reports/email-report.txt
         continue-on-error: true
