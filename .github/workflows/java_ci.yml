@@ -35,7 +35,7 @@ jobs:
           find target -name "*.jar" -type f -exec ls -lh {} \;
 
       - name: Upload JAR as artifact
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v4
         with:
           name: application-jar
           path: target/*.jar
@@ -51,7 +51,7 @@ jobs:
         uses: actions/checkout@v1
 
       - name: Download JAR artifact
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v4
         with:
           name: application-jar
           path: terraform/target
@@ -110,7 +110,7 @@ jobs:
           terraform output -raw api_gateway_url > ../api-info/api_url.txt || echo "" > ../api-info/api_url.txt
 
       - name: Upload API info as artifact
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v4
         with:
           name: api-details
           path: api-info
@@ -131,7 +131,7 @@ jobs:
           java-version: '17'
 
       - name: Download API details
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v4
         with:
           name: api-details
           path: api-info
@@ -215,7 +215,7 @@ jobs:
           fi
 
       - name: Upload test report as artifact
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v4
         with:
           name: test-reports
           path: test-reports/
@@ -228,7 +228,7 @@ jobs:
     if: always() && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     steps:
       - name: Download test reports
-        uses: actions/download-artifact@v1
+        uses: actions/download-artifact@v4
         with:
           name: test-reports
           path: test-reports/
