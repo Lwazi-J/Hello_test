@@ -19,7 +19,7 @@ variable "jar_file" {
 variable "lambda_handler" {
   description = "Lambda handler path"
   type        = string
-  default     = "com.example.demo.Handler::handleRequest"
+  default     = "BOOT-INF.classes.com.example.demo.Handler::handleRequest"
 }
 
 variable "lambda_runtime" {
