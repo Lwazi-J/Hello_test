@@ -1,29 +1,11 @@
 package com.example.demo;
 
-import com.amazonaws.serverless.exceptions.ContainerInitializationException;
-import com.amazonaws.serverless.proxy.model.AwsProxyRequest;
-import com.amazonaws.serverless.proxy.model.AwsProxyResponse;
 import com.amazonaws.services.lambda.runtime.Context;
-import com.amazonaws.services.lambda.runtime.RequestStreamHandler;
+import com.amazonaws.services.lambda.runtime.RequestHandler;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-
-public class Handler implements RequestStreamHandler {
-    private static final com.amazonaws.serverless.proxy.spring.SpringLambdaContainerHandler<AwsProxyRequest, AwsProxyResponse> handler;
-
-    static {
-        try {
-            handler = com.amazonaws.serverless.proxy.spring.SpringLambdaContainerHandler.getAwsProxyHandler(HelloApiApplication.class);
-        } catch (ContainerInitializationException e) {
-            throw new RuntimeException("Could not initialize Spring Boot application", e);
-        }
-    }
-
+public class Handler implements RequestHandler<Object, String> {
     @Override
-    public void handleRequest(InputStream inputStream, OutputStream outputStream, Context context)
-            throws IOException {
-        handler.proxyStream(inputStream, outputStream, context);
+    public String handleRequest(Object input, Context context) {
+        return "Hello, World!";
     }
 }
