@@ -113,10 +113,26 @@ jobs:
         with:
           terraform_version: 1.5.0
 
+      - name: Find Terraform directory
+        run: |
+          echo "Looking for Terraform files..."
+          TERRAFORM_DIR=$(find . -name "*.tf" -type f -exec dirname {} \; | sort -u | head -1)
+          if [ -z "$TERRAFORM_DIR" ]; then
+            echo "No Terraform files found. Creating basic Terraform files in ./terraform directory..."
+            mkdir -p ./terraform
+            cp -r main.tf outputs.tf variables.tf ./terraform/ 2>/dev/null || true
+            TERRAFORM_DIR="./terraform"
+          fi
+          echo "TERRAFORM_DIR=$TERRAFORM_DIR" >> $GITHUB_ENV
+          echo "Found Terraform directory: $TERRAFORM_DIR"
+          ls -la $TERRAFORM_DIR
+
       - name: Terraform Init
+        working-directory: ${{ env.TERRAFORM_DIR }}
         run: terraform init
 
       - name: Terraform Validate
+        working-directory: ${{ env.TERRAFORM_DIR }}
         run: terraform validate
 
       - name: Find JAR file
@@ -130,6 +146,7 @@ jobs:
           echo "JAR_PATH=$JAR_PATH" >> $GITHUB_ENV
 
       - name: Terraform Plan
+        working-directory: ${{ env.TERRAFORM_DIR }}
         run: |
           terraform plan \
             -var="app_name=spr-lambda-pipe-${{ github.ref == 'refs/heads/main' && 'prod' || 'sandbox' }}" \
@@ -140,12 +157,14 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Terraform Apply
+        working-directory: ${{ env.TERRAFORM_DIR }}
         run: terraform apply -auto-approve tfplan
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
 
       - name: Extract Terraform Outputs
+        working-directory: ${{ env.TERRAFORM_DIR }}
         run: |
           echo "API_ENDPOINT=$(terraform output -raw api_endpoint)" >> $GITHUB_ENV
           echo "FUNCTION_NAME=$(terraform output -raw function_name)" >> $GITHUB_ENV
