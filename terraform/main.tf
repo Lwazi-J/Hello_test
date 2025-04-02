@@ -14,19 +14,12 @@ resource "aws_s3_bucket_versioning" "lambda_bucket_versioning" {
   }
 }
 
-# Create a local ZIP file from the JAR
-data "archive_file" "lambda_zip" {
-  type        = "zip"
-  source_file = var.jar_file
-  output_path = "${path.module}/lambda_function.zip"
-}
-
-# Upload ZIP to S3
+# Upload JAR directly to S3
 resource "aws_s3_object" "lambda_package" {
   bucket = aws_s3_bucket.lambda_bucket.id
-  key    = "lambda_function_${data.archive_file.lambda_zip.output_md5}.zip"
-  source = data.archive_file.lambda_zip.output_path
-  etag   = filemd5(data.archive_file.lambda_zip.output_path)
+  key    = "lambda_function_${filemd5(var.jar_file)}.jar"
+  source = var.jar_file
+  etag   = filemd5(var.jar_file)
 }
 
 # IAM role for Lambda
@@ -61,7 +54,7 @@ resource "aws_lambda_function" "app" {
   runtime       = var.lambda_runtime
   memory_size   = var.lambda_memory
   timeout       = var.lambda_timeout
-  package_type  = "Zip"  # Only "Zip" or "Image" are valid values
+  package_type  = "Zip"  # Keep "Zip" since it's referring to the package type, not creating a zip
 
   s3_bucket = aws_s3_bucket.lambda_bucket.id
   s3_key    = aws_s3_object.lambda_package.key
@@ -73,7 +66,7 @@ resource "aws_lambda_function" "app" {
   }
 
   # Make sure Lambda is only updated when code changes
-  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  source_code_hash = filemd5(var.jar_file)
 }
 
 # API Gateway
