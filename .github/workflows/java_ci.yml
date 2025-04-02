@@ -20,6 +20,7 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: maven
 
       - name: Build with Maven
         run: mvn -B compile --file pom.xml
@@ -34,20 +35,13 @@ jobs:
         run: |
           echo "JAR file details:"
           find target -name "*.jar" -type f -exec ls -lh {} \;
-          # Create a file with the exact JAR name for later use
-          find target -name "*.jar" -type f -printf "%f\n" > jar_filename.txt
 
       - name: Upload JAR as artifact
         uses: actions/upload-artifact@v4
         with:
           name: application-jar
           path: target/*.jar
-
-      - name: Upload JAR filename
-        uses: actions/upload-artifact@v4
-        with:
-          name: jar-filename
-          path: jar_filename.txt
+          retention-days: 5
 
   # Step 3: Deploy Infrastructure
   terraform:
@@ -59,38 +53,16 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create target directory
-        run: mkdir -p terraform/target
-
       - name: Download JAR artifact
         uses: actions/download-artifact@v4
         with:
           name: application-jar
           path: terraform/target
 
-      - name: Download JAR filename
-        uses: actions/download-artifact@v4
-        with:
-          name: jar-filename
-          path: terraform
-
-      - name: Check downloaded files
-        run: |
-          echo "Files in terraform/target directory:"
-          ls -la terraform/target/
-          echo "JAR filename:"
-          cat terraform/jar_filename.txt
-
-      - name: Update Terraform variables
-        run: |
-          JAR_FILENAME=$(cat terraform/jar_filename.txt)
-          echo "jar_filename = \"$JAR_FILENAME\"" > terraform/terraform.tfvars
-          echo "Created terraform.tfvars with JAR filename: $JAR_FILENAME"
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.0.0
+          terraform_version: 1.7.0
 
       - name: Terraform Init
         run: |
@@ -145,6 +117,7 @@ jobs:
         with:
           name: api-details
           path: api-info
+          retention-days: 1
 
   # Step 4: Integration Tests
   integration_test:
@@ -161,6 +134,7 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: maven
 
       - name: Download API details
         uses: actions/download-artifact@v4
@@ -216,6 +190,7 @@ jobs:
         with:
           java-version: '17'
           distribution: 'temurin'
+          cache: maven
 
       - name: Generate Test Reports
         run: |
@@ -252,6 +227,7 @@ jobs:
         with:
           name: test-reports
           path: test-reports/
+          retention-days: 5
 
   # Step 6: Email Report
   email_report:
@@ -267,7 +243,7 @@ jobs:
           path: test-reports/
 
       - name: Send Email with Test Report
-        uses: dawidd6/action-send-mail@v3
+        uses: dawidd6/action-send-mail@v3.9.0
         with:
           server_address: smtp.gmail.com
           server_port: 465

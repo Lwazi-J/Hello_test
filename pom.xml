@@ -160,34 +160,45 @@
 
 		<dependency>
 			<groupId>com.amazonaws.serverless</groupId>
-			<artifactId>aws-serverless-java-container-springboot3</artifactId>
-			<version>2.0.0-M2</version>
+			<artifactId>aws-serverless-java-container-core</artifactId>
+			<version>2.1.0</version>
 		</dependency>
 
 		<dependency>
 			<groupId>com.amazonaws.serverless</groupId>
-			<artifactId>aws-serverless-java-container-spring</artifactId>
-			<version>1.9.1</version>
+			<artifactId>aws-serverless-java-container-springboot3</artifactId>
+			<version>2.1.0</version>
 		</dependency>
 	</dependencies>
 
 	<build>
 		<plugins>
-			<!-- Spring Boot Maven Plugin -->
+
+			<!-- Spring Boot Maven Plugin configuration -->
 			<plugin>
 				<groupId>org.springframework.boot</groupId>
 				<artifactId>spring-boot-maven-plugin</artifactId>
 				<configuration>
+					<layout>ZIP</layout>
+					<classifier>aws</classifier>
 					<excludes>
 						<exclude>
 							<groupId>org.projectlombok</groupId>
 							<artifactId>lombok</artifactId>
 						</exclude>
 					</excludes>
+					<layers>
+						<enabled>false</enabled>
+					</layers>
 				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>repackage</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
-
-
 
 			<!-- Maven Surefire Plugin for Tests -->
 			<plugin>
