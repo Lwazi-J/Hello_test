@@ -1,0 +1,156 @@
+openapi: 3.0.1
+info:
+  title: Greeting API
+  description: API for managing greetings
+  version: 1.0.0
+paths:
+  /hello:
+    get:
+      summary: Get hello world message
+      responses:
+        '200':
+          description: Success
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "Hello World"
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        uri: arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${region}:${accountId}:function:${lambdaFunction}/invocations
+        httpMethod: POST
+        passthroughBehavior: when_no_match
+
+    post:
+      summary: Create a new greeting
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GreetingRequest'
+      responses:
+        '200':
+          description: Greeting created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Greeting'
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        uri: arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${region}:${accountId}:function:${lambdaFunction}/invocations
+        httpMethod: POST
+        passthroughBehavior: when_no_match
+
+  /hello/all:
+    get:
+      summary: Get all greetings
+      responses:
+        '200':
+          description: List of all greetings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Greeting'
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        uri: arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${region}:${accountId}:function:${lambdaFunction}/invocations
+        httpMethod: POST
+        passthroughBehavior: when_no_match
+
+  /hello/name/{name}:
+    get:
+      summary: Get hello message with name
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "Hello John"
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        uri: arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${region}:${accountId}:function:${lambdaFunction}/invocations
+        httpMethod: POST
+        passthroughBehavior: when_no_match
+
+  /hello/id/{id}:
+    put:
+      summary: Update a greeting
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GreetingRequest'
+      responses:
+        '200':
+          description: Greeting updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Greeting'
+        '404':
+          description: Greeting not found
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        uri: arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${region}:${accountId}:function:${lambdaFunction}/invocations
+        httpMethod: POST
+        passthroughBehavior: when_no_match
+
+    delete:
+      summary: Delete a greeting
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Greeting deleted successfully
+        '404':
+          description: Greeting not found
+      x-amazon-apigateway-integration:
+        type: aws_proxy
+        uri: arn:aws:apigateway:${region}:lambda:path/2015-03-31/functions/arn:aws:lambda:${region}:${accountId}:function:${lambdaFunction}/invocations
+        httpMethod: POST
+        passthroughBehavior: when_no_match
+
+components:
+  schemas:
+    Greeting:
+      type: object
+      properties:
+        id:
+          type: string
+        message:
+          type: string
+      required:
+        - id
+        - message
+    GreetingRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        message:
+          type: string
+      required:
+        - name
+        - message

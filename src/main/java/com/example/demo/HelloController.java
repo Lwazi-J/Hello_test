@@ -1,14 +1,21 @@
 package com.example.demo;
 
+import com.example.demo.model.HelloMessage;
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Pattern;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.http.HttpStatus;
 
 import java.util.*;
 
 @RestController
+@Validated
 public class HelloController {
 
-    private List<Greeting> greetings = new ArrayList<>();
+    private final List<Greeting> greetings = Collections.synchronizedList(new ArrayList<>());
 
     private Optional<Greeting> findGreetingById(String id) {
         return greetings.stream().filter(g -> g.getId() != null && g.getId().equals(id)).findFirst();
@@ -24,7 +31,10 @@ public class HelloController {
     }
 
     @GetMapping("/hello/{name}")
-    public String helloWithName(@PathVariable String name) {
+    public String helloWithName(
+            @PathVariable 
+            @Pattern(regexp = "[a-zA-Z0-9\\s]+", message = "Name can only contain alphanumeric characters and spaces") 
+            String name) {
         return String.format("Hello %s", name);
     }
 
@@ -34,21 +44,36 @@ public class HelloController {
     }
 
     @PostMapping("/hello")
-    public Greeting createGreeting(@RequestBody GreetingRequest request) {
+    public Greeting createGreeting(@Valid @RequestBody GreetingRequest request) {
+        // Validate input
+        if (request.getName() == null || request.getMessage() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Name and message are required");
+        }
+        
         // Format the message to include both name and message content
-
         Greeting greeting = new Greeting(String.valueOf(greetings.size() + 1), request.getMessage(), request.getName());
         greetings.add(greeting);
         return greeting;
     }
 
     @PutMapping("/hello/{id}")
-    public ResponseEntity<Greeting> updateGreeting(@PathVariable String id, @RequestBody GreetingRequest request) {
+    public ResponseEntity<Greeting> updateGreeting(
+            @PathVariable 
+            @Pattern(regexp = "[a-zA-Z0-9\\s]+", message = "ID can only contain alphanumeric characters") 
+            String id, 
+            @Valid @RequestBody GreetingRequest request) {
+        
         Optional<Greeting> greetingOpt = findGreetingById(id);
 
         if (greetingOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
+        
+        // Validate input
+        if (request.getName() == null || request.getMessage() == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        
         // Format the message to include both name and message content
         String formattedMessage = String.format("Hello %s! Your message: %s", request.getName(), request.getMessage());
 
